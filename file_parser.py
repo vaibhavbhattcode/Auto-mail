@@ -1,4 +1,4 @@
-import pandas as pd
+import openpyxl
 import pypdf
 import re
 
@@ -6,59 +6,60 @@ def parse_file(file_path):
     ext = file_path.split('.')[-1].lower()
     leads = []
     
-    if ext in ['xlsx', 'xls', 'csv']:
-        if ext == 'csv':
-            df = pd.read_csv(file_path)
-        else:
-            df = pd.read_excel(file_path)
-            
-        # Clean column names
-        df.columns = [str(c).strip().lower() for c in df.columns]
+    if ext in ['xlsx', 'xls']:
+        # Use openpyxl directly
+        wb = openpyxl.load_workbook(file_path)
+        sheet = wb.active
         
-        # Helper to find column
-        def find_col(keywords, default_val=''):
-            for col in df.columns:
+        # Get headers
+        headers = []
+        for cell in sheet[1]:
+            headers.append(str(cell.value).strip().lower() if cell.value else '')
+        
+        # Helper to find column index
+        def find_col_idx(keywords):
+            for i, col in enumerate(headers):
                 for kw in keywords:
                     if kw in col:
-                        return col
+                        return i
             return None
-            
-        col_company = find_col(['company', 'business', 'name', 'client'])
-        col_web = find_col(['website', 'url', 'domain'])
-        col_ind = find_col(['industry', 'niche', 'sector'])
-        col_loc = find_col(['location', 'city', 'country'])
-        col_status = find_col(['status', 'app'])
-        col_email = find_col(['email', 'contact', 'mail'])
-        col_phone = find_col(['whatsapp', 'phone', 'number', 'mobile'])
-        col_linkedin = find_col(['linkedin', 'social'])
-        col_sub = find_col(['subject'])
-        col_pitch = find_col(['pitch', 'message', 'body', 'details', 'text'])
         
-        for _, row in df.iterrows():
-            company = str(row[col_company]).strip() if col_company and pd.notna(row[col_company]) else "Unnamed Company"
-            if company == "Unnamed Company" and col_web and pd.notna(row[col_web]):
-                company = str(row[col_web]).split('.')[0].capitalize()
-                
-            email = str(row[col_email]).strip() if col_email and pd.notna(row[col_email]) else "contact@example.com"
-            # Quick email clean
+        col_company = find_col_idx(['company', 'business', 'name', 'client'])
+        col_web = find_col_idx(['website', 'url', 'domain'])
+        col_ind = find_col_idx(['industry', 'niche', 'sector'])
+        col_loc = find_col_idx(['location', 'city', 'country'])
+        col_status = find_col_idx(['status', 'app'])
+        col_email = find_col_idx(['email', 'contact', 'mail'])
+        col_phone = find_col_idx(['whatsapp', 'phone', 'number', 'mobile'])
+        col_linkedin = find_col_idx(['linkedin', 'social'])
+        col_sub = find_col_idx(['subject'])
+        col_pitch = find_col_idx(['pitch', 'message', 'body', 'details', 'text'])
+        
+        # Process rows (skip header)
+        for row in list(sheet.rows)[1:]:
+            cells = [cell.value for cell in row]
+            
+            company = str(cells[col_company]).strip() if col_company is not None and cells[col_company] else "Unnamed Company"
+            if company == "Unnamed Company" and col_web is not None and cells[col_web]:
+                company = str(cells[col_web]).split('.')[0].capitalize()
+            
+            email = str(cells[col_email]).strip() if col_email is not None and cells[col_email] else "contact@example.com"
             if email.startswith("UI"): email = email[2:]
             elif email.startswith("App"): email = email[3:]
             elif email.startswith("only"): email = email[4:]
             
-            web = str(row[col_web]).strip() if col_web and pd.notna(row[col_web]) else "example.com"
-            ind = str(row[col_ind]).strip() if col_ind and pd.notna(row[col_ind]) else "Technology"
-            loc = str(row[col_loc]).strip() if col_loc and pd.notna(row[col_loc]) else "India"
-            app_st = str(row[col_status]).strip() if col_status and pd.notna(row[col_status]) else "Review Needed"
-            phone = str(row[col_phone]).strip() if col_phone and pd.notna(row[col_phone]) else "+91 9510539603"
-            linkedin = str(row[col_linkedin]).strip() if col_linkedin and pd.notna(row[col_linkedin]) else ""
+            web = str(cells[col_web]).strip() if col_web is not None and cells[col_web] else "example.com"
+            ind = str(cells[col_ind]).strip() if col_ind is not None and cells[col_ind] else "Technology"
+            loc = str(cells[col_loc]).strip() if col_loc is not None and cells[col_loc] else "India"
+            app_st = str(cells[col_status]).strip() if col_status is not None and cells[col_status] else "Review Needed"
+            phone = str(cells[col_phone]).strip() if col_phone is not None and cells[col_phone] else "+91 9510539603"
+            linkedin = str(cells[col_linkedin]).strip() if col_linkedin is not None and cells[col_linkedin] else ""
+            sub = str(cells[col_sub]).strip() if col_sub is not None and cells[col_sub] else f"Your {company} app — quick thought"
+            pitch = str(cells[col_pitch]).strip() if col_pitch is not None and cells[col_pitch] else ""
             
-            sub = str(row[col_sub]).strip() if col_sub and pd.notna(row[col_sub]) else f"Your {company} app — quick thought"
-            pitch = str(row[col_pitch]).strip() if col_pitch and pd.notna(row[col_pitch]) else ""
+            if not pitch or pitch == 'None':
+                pitch = f"Hi Team at {company},\n\nI came across {company} and your platform at {web}. I noticed your current app setup is {app_st}.\n\nI run Bhatt Technologies, a specialized app development agency.\n\nHappy to connect. Reply here or WhatsApp at {phone}.\n\nBest regards,\nVaibhav Bhatt\nBhatt Technologies"
             
-            # If pitch is empty, generate a nice default pitch
-            if not pitch or pitch == 'nan':
-                pitch = f"Hi Team at {company},\n\nI came across {company} and your platform at {web}. I noticed your current app setup is {app_st} — which seems like an untapped opportunity for your business in the {ind} space.\n\nIn your highly competitive industry, a modern, frictionless mobile app is exactly what keeps customers engaged, streamlines reorders/bookings, and drives retention.\n\nI run DhruvBuilds (dhruvbuilds.in), a specialized app development agency. We rebuild and modernize apps for businesses like yours.\n\nIf improving your app is on your roadmap this year, I'd love to share a few quick tailored ideas.\n\nHappy to connect over a short call or chat. Feel free to reply here or drop me a message on WhatsApp at {phone}.\n\nBest regards,\nDhruv Patel\nDhruvBuilds"
-                
             leads.append({
                 "company_name": company,
                 "website": web,
