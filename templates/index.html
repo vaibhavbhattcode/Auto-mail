@@ -1,0 +1,1551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-800, initial-scale=1.0">
+    <title>Bhatt Technologies — Automated App Dev Pitching & Outreach Hub</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Vue 3 CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        [v-cloak] { display: none; }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #F3F4F6; }
+        ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased selection:bg-blue-500 selection:text-white">
+
+<div id="app" v-cloak class="min-h-screen flex flex-col">
+    <!-- Toast Notification -->
+    <div v-if="toast.show" 
+         class="fixed top-5 right-5 z-50 flex items-center p-4 mb-4 w-full max-w-sm rounded-xl shadow-xl transition-all duration-300 border"
+         :class="toast.type === 'success' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'">
+        <div class="inline-flex flex-shrink-0 items-center justify-center w-8 h-8 rounded-lg"
+             :class="toast.type === 'success' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'">
+            <svg v-if="toast.type === 'success'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+            </svg>
+            <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </div>
+        <div class="ml-3 text-sm font-medium">{{ toast.message }}</div>
+        <button @click="toast.show = false" class="ml-auto -mx-1.5 -my-1.5 p-1.5 rounded-lg focus:ring-2 inline-flex h-8 w-8 hover:bg-black/5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+    </div>
+
+    <!-- --- LOGIN VIEW --- -->
+    <div v-if="!authState.logged_in" class="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-950 p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 border border-slate-100 relative overflow-hidden">
+            <div class="absolute -right-12 -top-12 w-40 h-40 bg-blue-500/10 rounded-full blur-2xl"></div>
+            <div class="absolute -left-12 -bottom-12 w-40 h-40 bg-indigo-500/10 rounded-full blur-2xl"></div>
+            
+            <div class="text-center mb-8 relative z-10">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-500/30 mb-4 font-bold text-2xl tracking-wider">
+                    BT
+                </div>
+                <h2 class="text-3xl font-extrabold text-slate-900 tracking-tight">Bhatt Technologies Hub</h2>
+                <p class="text-sm text-slate-500 mt-2">Automated App Development Lead Outreach</p>
+            </div>
+
+            <form @submit.prevent="handleLogin" class="space-y-6 relative z-10">
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">Secure Admin Password / PIN</label>
+                    <div class="relative">
+                        <input :type="showPassword ? 'text' : 'password'" 
+                               v-model="loginPassword" 
+                               placeholder="Enter password..."
+                               class="w-full pl-4 pr-12 py-3.5 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 outline-none transition font-medium text-slate-800 placeholder:text-slate-400"
+                               required>
+                        <button type="button" @click="showPassword = !showPassword" class="absolute right-4 top-3.5 text-slate-400 hover:text-slate-600">
+                            <svg v-if="!showPassword" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                            <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" /></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" 
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-2xl shadow-lg shadow-blue-500/25 transition active:scale-[0.99] flex items-center justify-center space-x-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
+                    <span>Access Dashboard</span>
+                </button>
+            </form>
+
+            <div class="mt-8 pt-6 border-t border-slate-100 text-center">
+                <div class="bg-blue-50 text-blue-800 p-3.5 rounded-2xl text-xs flex items-start text-left space-x-2.5">
+                    <svg class="w-5 h-5 flex-shrink-0 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <div>
+                        <span class="font-bold">Default Demo Access:</span> Enter password <code class="bg-white px-1.5 py-0.5 rounded font-mono font-bold text-blue-900 border border-blue-200">dhruv2026</code> to log in instantly.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- --- MAIN DASHBOARD APP --- -->
+    <div v-else class="flex-1 flex flex-col bg-slate-100/50">
+        <!-- Top Navbar -->
+        <header class="bg-white border-b border-slate-200 sticky top-0 z-30 px-6 py-4 flex items-center justify-between shadow-xs">
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-extrabold rounded-xl shadow-md flex items-center justify-center text-lg">
+                        BT
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg text-slate-900 leading-none">Bhatt Technologies Hub</h1>
+                        <span class="text-xs text-slate-500 font-medium">Automated Outreach & Pitch Dispatcher</span>
+                    </div>
+                </div>
+                <div class="h-6 w-[1px] bg-slate-200 hidden md:block"></div>
+                <!-- Navigation Tabs -->
+                <nav class="hidden md:flex items-center space-x-1">
+                    <button @click="currentTab = 'dashboard'" 
+                            :class="currentTab === 'dashboard' ? 'bg-slate-100 text-blue-600 font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
+                            class="px-3.5 py-2 rounded-xl text-sm transition flex items-center space-x-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+                        <span>Overview</span>
+                    </button>
+                    <button @click="currentTab = 'leads'" 
+                            :class="currentTab === 'leads' ? 'bg-slate-100 text-blue-600 font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
+                            class="px-3.5 py-2 rounded-xl text-sm transition flex items-center space-x-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                        <span>Leads & Excel</span>
+                        <span class="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full font-bold">{{ stats.total_leads }}</span>
+                    </button>
+                    <button @click="currentTab = 'templates'" 
+                            :class="currentTab === 'templates' ? 'bg-slate-100 text-blue-600 font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
+                            class="px-3.5 py-2 rounded-xl text-sm transition flex items-center space-x-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                        <span>Pitch Templates</span>
+                    </button>
+                    <button @click="currentTab = 'logs'" 
+                            :class="currentTab === 'logs' ? 'bg-slate-100 text-blue-600 font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
+                            class="px-3.5 py-2 rounded-xl text-sm transition flex items-center space-x-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        <span>Sent Logs</span>
+                    </button>
+                </nav>
+            </div>
+
+            <div class="flex items-center space-x-3">
+                <!-- Email Operating Mode Badge -->
+                <button @click="currentTab = 'settings'" class="hidden sm:inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold border transition"
+                        :class="settings.email_mode === 'live' ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100'">
+                    <span class="w-2 h-2 rounded-full mr-2 animate-pulse" :class="settings.email_mode === 'live' ? 'bg-emerald-600' : 'bg-amber-500'"></span>
+                    <span>{{ settings.email_mode === 'live' ? 'Live SMTP Mode' : 'Test Simulation Mode' }}</span>
+                </button>
+
+                <!-- Settings CTA -->
+                <button @click="currentTab = 'settings'" 
+                        class="p-2.5 rounded-xl text-slate-600 hover:text-blue-600 hover:bg-slate-100 transition relative"
+                        title="Configure SMTP Credentials">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    <span v-if="!settings.google_email || !settings.google_app_password" class="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full"></span>
+                </button>
+
+                <!-- Logout -->
+                <button @click="handleLogout" class="p-2.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Logout">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Mobile Nav Tabs -->
+        <div class="bg-white border-b border-slate-200 px-4 py-2 flex md:hidden items-center justify-around shadow-xs">
+            <button @click="currentTab = 'dashboard'" :class="currentTab === 'dashboard' ? 'text-blue-600 font-bold' : 'text-slate-600'" class="py-1 text-sm">Overview</button>
+            <button @click="currentTab = 'leads'" :class="currentTab === 'leads' ? 'text-blue-600 font-bold' : 'text-slate-600'" class="py-1 text-sm">Leads ({{ stats.total_leads }})</button>
+            <button @click="currentTab = 'templates'" :class="currentTab === 'templates' ? 'text-blue-600 font-bold' : 'text-slate-600'" class="py-1 text-sm">Templates</button>
+            <button @click="currentTab = 'logs'" :class="currentTab === 'logs' ? 'text-blue-600 font-bold' : 'text-slate-600'" class="py-1 text-sm">Logs</button>
+        </div>
+
+        <!-- --- TAB 1: OVERVIEW DASHBOARD --- -->
+        <main v-if="currentTab === 'dashboard'" class="flex-1 max-w-7xl w-full mx-auto p-6 space-y-8">
+            <!-- SMTP Notice Banner if Not Configured -->
+            <div v-if="!settings.google_email || !settings.google_app_password" 
+                 class="bg-gradient-to-r from-amber-500 to-amber-600 rounded-3xl p-6 text-white shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div class="flex items-start space-x-4">
+                    <div class="bg-white/20 p-3 rounded-2xl flex-shrink-0 mt-0.5">
+                        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold">SMTP Credentials Not Configured</h3>
+                        <p class="text-amber-100 text-sm mt-1 max-w-2xl">
+                            To send real automated emails, configure your sender email credentials and SMTP host details. The system is currently in simulated testing mode.
+                        </p>
+                    </div>
+                </div>
+                <button @click="currentTab = 'settings'" class="bg-white text-amber-900 font-extrabold px-6 py-3 rounded-2xl shadow hover:bg-amber-50 transition whitespace-nowrap self-stretch sm:self-auto text-center">
+                    Connect SMTP &rarr;
+                </button>
+            </div>
+
+            <!-- Welcome CTA Hero -->
+            <div class="bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-800 rounded-3xl p-8 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden">
+                <div class="absolute -right-10 -bottom-10 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
+                
+                <div class="space-y-3 relative z-10 max-w-2xl">
+                    <div class="inline-flex items-center bg-blue-500/30 border border-blue-400/40 rounded-full px-3 py-1 text-xs font-semibold text-blue-100 backdrop-blur-sm">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 mr-2"></span> Automatic Engine Active
+                    </div>
+                    <h2 class="text-3xl font-extrabold tracking-tight">Supercharge Your Agency Pitching</h2>
+                    <p class="text-blue-100 text-sm md:text-base leading-relaxed">
+                        Upload your custom lead sheets, automatically analyze their current app status, customize pitches dynamically, and schedule automated follow-ups via your configured SMTP account.
+                    </p>
+                    <div class="pt-2 flex flex-wrap items-center gap-3">
+                        <button @click="currentTab = 'leads'; showUploadModal = true" 
+                                class="bg-white hover:bg-blue-50 text-blue-900 font-extrabold px-5 py-3 rounded-2xl shadow-md transition flex items-center space-x-2 text-sm">
+                            <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                            <span>Upload Lead Sheet</span>
+                        </button>
+                        <button @click="currentTab = 'templates'" 
+                                class="bg-blue-700/60 hover:bg-blue-700 border border-blue-400/40 text-white font-semibold px-5 py-3 rounded-2xl transition flex items-center space-x-2 text-sm backdrop-blur-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                            <span>Edit Pitch Templates</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white/10 p-6 rounded-3xl backdrop-blur-md border border-white/10 flex flex-col items-center justify-center min-w-[240px] text-center relative z-10">
+                    <span class="text-4xl font-black text-white">{{ stats.sent_emails }}</span>
+                    <span class="text-xs font-bold text-blue-200 uppercase tracking-widest mt-1">Pitches Dispatched</span>
+                    <div class="w-full bg-white/20 h-1.5 rounded-full mt-4 overflow-hidden">
+                        <div class="bg-emerald-400 h-full rounded-full transition-all" :style="'width: ' + (stats.total_leads ? (stats.sent_emails / stats.total_leads * 100) : 0) + '%'"></div>
+                    </div>
+                    <span class="text-[11px] text-blue-200 mt-2 font-medium">{{ stats.pending_leads }} leads waiting in queue</span>
+                </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Imported</span>
+                        <h4 class="text-3xl font-black text-slate-900 mt-1">{{ stats.total_leads }}</h4>
+                        <span class="text-xs text-blue-600 font-semibold flex items-center mt-2">
+                            <span>Ready to process</span>
+                        </span>
+                    </div>
+                    <div class="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
+                        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Sent Pitches</span>
+                        <h4 class="text-3xl font-black text-emerald-600 mt-1">{{ stats.sent_emails }}</h4>
+                        <span class="text-xs text-emerald-600 font-semibold flex items-center mt-2">
+                            <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg>
+                            <span>Fully dispatched</span>
+                        </span>
+                    </div>
+                    <div class="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center">
+                        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Scheduled Queue</span>
+                        <h4 class="text-3xl font-black text-indigo-600 mt-1">{{ stats.scheduled_emails }}</h4>
+                        <span class="text-xs text-indigo-600 font-semibold flex items-center mt-2">
+                            <span>Auto background loop</span>
+                        </span>
+                    </div>
+                    <div class="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+                        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Est. Reply Rate</span>
+                        <h4 class="text-3xl font-black text-blue-600 mt-1">{{ stats.reply_rate }}%</h4>
+                        <span class="text-xs text-slate-500 font-semibold flex items-center mt-2">
+                            <span>{{ stats.open_rate }}% Est. Open Rate</span>
+                        </span>
+                    </div>
+                    <div class="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center">
+                        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Content Grid Layout -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Industry Breakdown -->
+                <div class="bg-white p-7 rounded-3xl border border-slate-200 shadow-xs flex flex-col justify-between">
+                    <div>
+                        <h3 class="font-bold text-lg text-slate-900">Industry Representation</h3>
+                        <p class="text-xs text-slate-500 mt-0.5">Distribution of imported leads by target sector</p>
+                        
+                        <div class="mt-6 space-y-4">
+                            <div v-for="(ind, i) in stats.industry_distribution" :key="i" class="space-y-1.5">
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="font-semibold text-slate-700 flex items-center space-x-2">
+                                        <span class="w-2.5 h-2.5 rounded-full" :class="['bg-blue-500', 'bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-purple-500'][i % 5]"></span>
+                                        <span>{{ ind.name }}</span>
+                                    </span>
+                                    <span class="font-extrabold text-slate-900">{{ ind.count }} <span class="text-xs font-normal text-slate-400">leads</span></span>
+                                </div>
+                                <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                    <div class="h-full rounded-full" 
+                                         :class="['bg-blue-500', 'bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-purple-500'][i % 5]"
+                                         :style="'width: ' + (ind.count / stats.total_leads * 100) + '%'"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-8 pt-6 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                        <span>Automated categorization enabled</span>
+                        <button @click="currentTab = 'leads'" class="text-blue-600 font-bold hover:underline">Filter Leads &rarr;</button>
+                    </div>
+                </div>
+
+                <!-- Live Activity Feed -->
+                <div class="lg:col-span-2 bg-white p-7 rounded-3xl border border-slate-200 shadow-xs flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-6">
+                            <div>
+                                <h3 class="font-bold text-lg text-slate-900">Recent Live Dispatches</h3>
+                                <p class="text-xs text-slate-500 mt-0.5">Real-time log of background email queue executions</p>
+                            </div>
+                            <button @click="currentTab = 'logs'" class="text-blue-600 text-xs font-bold hover:underline">View All Logs</button>
+                        </div>
+
+                        <div v-if="stats.recent_logs && stats.recent_logs.length" class="space-y-3">
+                            <div v-for="log in stats.recent_logs" :key="log.id" 
+                                 class="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between gap-4 transition hover:bg-slate-100/80">
+                                <div class="flex items-center space-x-3.5 overflow-hidden">
+                                    <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 font-bold text-sm"
+                                         :class="log.status === 'Success' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'">
+                                        <svg v-if="log.status === 'Success'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg>
+                                        <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <div class="font-bold text-sm text-slate-900 truncate">{{ log.subject }}</div>
+                                        <div class="text-xs text-slate-500 truncate flex items-center space-x-2 mt-0.5">
+                                            <span class="font-medium text-slate-700">{{ log.recipient_email }}</span>
+                                            <span>•</span>
+                                            <span>{{ log.timestamp }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <span class="px-3 py-1 rounded-full text-xs font-bold flex-shrink-0"
+                                      :class="log.status === 'Success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'">
+                                    {{ log.status }}
+                                </span>
+                            </div>
+                        </div>
+                        <div v-else class="text-center py-12 text-slate-400">
+                            <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" /></svg>
+                            <p class="text-sm">No recent dispatches. Send or schedule pitches from the leads sheet.</p>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                        <span>Background engine runs every 20 seconds</span>
+                        <span class="text-emerald-600 font-bold flex items-center"><span class="w-2 h-2 rounded-full bg-emerald-500 mr-1.5 animate-ping"></span> Live Sockets</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- --- TAB 2: LEADS & EXCEL UPLOAD --- -->
+        <main v-if="currentTab === 'leads'" class="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
+            <!-- Header bar -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight">Leads & Excel Manager</h2>
+                    <p class="text-sm text-slate-500 mt-0.5">Filter, customize pitches, instantly execute emails or schedule automated queues</p>
+                </div>
+                
+                <div class="flex items-center space-x-3">
+                    <button @click="showAddLeadModal = true" 
+                            class="bg-white border border-slate-200 hover:bg-slate-50 font-bold text-slate-700 px-4 py-2.5 rounded-2xl shadow-xs transition flex items-center space-x-2 text-sm">
+                        <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                        <span>Add Lead</span>
+                    </button>
+                    <button @click="showUploadModal = true" 
+                            class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-2xl shadow-lg shadow-blue-500/25 transition flex items-center space-x-2 text-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                        <span>Import Excel / PDF</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search and Filter Toolbars -->
+            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
+                <div class="relative w-full md:w-80">
+                    <svg class="absolute left-3.5 top-3 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    <input type="text" v-model="filters.search" @input="fetchLeads" placeholder="Search company, domain, email..."
+                           class="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm font-medium">
+                </div>
+
+                <div class="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
+                    <div class="flex items-center space-x-2 text-xs font-bold text-slate-500">
+                        <span>STATUS:</span>
+                        <select v-model="filters.status" @change="fetchLeads" class="bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 font-semibold text-slate-800 outline-none cursor-pointer">
+                            <option>All</option>
+                            <option>Pending</option>
+                            <option>Scheduled</option>
+                            <option>Sent</option>
+                            <option>Failed</option>
+                        </select>
+                    </div>
+
+                    <div class="flex items-center space-x-2 text-xs font-bold text-slate-500">
+                        <span>INDUSTRY:</span>
+                        <select v-model="filters.industry" @change="fetchLeads" class="bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 font-semibold text-slate-800 outline-none cursor-pointer">
+                            <option>All</option>
+                            <option>Fitness & Wellness</option>
+                            <option>EdTech & Learning</option>
+                            <option>E-commerce & Retail</option>
+                            <option>Health & Wellness</option>
+                            <option>Technology</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bulk Operations Action Bar if Items Selected -->
+            <div v-if="selectedLeads.length" 
+                 class="bg-blue-600 text-white px-6 py-3.5 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-4 animate-fadeIn">
+                <div class="font-extrabold text-sm flex items-center space-x-2">
+                    <span class="bg-white text-blue-900 px-2.5 py-0.5 rounded-lg text-xs">{{ selectedLeads.length }}</span>
+                    <span>Leads Selected</span>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button @click="executeBulkAction('send')" class="bg-white hover:bg-blue-50 text-blue-900 px-4 py-2 rounded-xl font-bold text-xs shadow-xs transition flex items-center space-x-1.5">
+                        <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                        <span>Dispatch Now</span>
+                    </button>
+                    <button @click="showBulkScheduleModal = true" class="bg-blue-700 hover:bg-blue-800 border border-blue-400/40 text-white px-4 py-2 rounded-xl font-bold text-xs transition flex items-center space-x-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        <span>Schedule Batch</span>
+                    </button>
+                    <button @click="executeBulkAction('reset')" class="bg-blue-700 hover:bg-blue-800 border border-blue-400/40 text-white px-4 py-2 rounded-xl font-bold text-xs transition">
+                        Reset Status
+                    </button>
+                    <button @click="executeBulkAction('delete')" class="bg-rose-500 hover:bg-rose-600 text-white px-4 py-2 rounded-xl font-bold text-xs transition">
+                        Delete
+                    </button>
+                </div>
+            </div>
+
+            <!-- Leads Data Table -->
+            <div class="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-xs font-extrabold text-slate-500 uppercase tracking-wider">
+                                <th class="py-4 pl-6 pr-3 w-12">
+                                    <input type="checkbox" @change="toggleSelectAll" :checked="selectAllChecked"
+                                           class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer">
+                                </th>
+                                <th class="py-4 px-3">Company / Business</th>
+                                <th class="py-4 px-3">Target Industry</th>
+                                <th class="py-4 px-3">App Diagnosis</th>
+                                <th class="py-4 px-3">Contact Email & WhatsApp</th>
+                                <th class="py-4 px-3">Status</th>
+                                <th class="py-4 pr-6 pl-3 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 text-sm font-medium">
+                            <tr v-for="lead in leads" :key="lead.id" class="hover:bg-slate-50/80 transition group">
+                                <td class="py-4 pl-6 pr-3">
+                                    <input type="checkbox" v-model="selectedLeads" :value="lead.id"
+                                           class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer">
+                                </td>
+                                <td class="py-4 px-3 max-w-[200px]">
+                                    <div class="font-bold text-slate-900 truncate">{{ lead.company_name }}</div>
+                                    <a :href="'http://' + lead.website" target="_blank" class="text-xs text-blue-600 hover:underline font-normal truncate block mt-0.5">
+                                        {{ lead.website }}
+                                    </a>
+                                </td>
+                                <td class="py-4 px-3 whitespace-nowrap">
+                                    <span class="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg text-xs font-bold">
+                                        {{ lead.industry }}
+                                    </span>
+                                </td>
+                                <td class="py-4 px-3 max-w-[200px]">
+                                    <div class="text-xs font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded inline-block truncate max-w-full">
+                                        {{ lead.app_status }}
+                                    </div>
+                                </td>
+                                <td class="py-4 px-3">
+                                    <div class="font-bold text-slate-800">{{ lead.contact_email }}</div>
+                                    <div class="text-xs text-slate-500 font-mono mt-0.5">{{ lead.whatsapp_number }}</div>
+                                </td>
+                                <td class="py-4 px-3 whitespace-nowrap">
+                                    <span v-if="lead.status === 'Pending'" class="bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1 rounded-full text-xs font-bold inline-flex items-center">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span> Pending
+                                    </span>
+                                    <span v-else-if="lead.status === 'Scheduled'" class="bg-indigo-50 text-indigo-700 border border-indigo-200 px-3 py-1 rounded-full text-xs font-bold inline-flex items-center">
+                                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                        {{ lead.scheduled_time }}
+                                    </span>
+                                    <span v-else-if="lead.status === 'Sent'" class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full text-xs font-bold inline-flex items-center">
+                                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg>
+                                        Sent
+                                    </span>
+                                    <span v-else class="bg-rose-50 text-rose-700 border border-rose-200 px-3 py-1 rounded-full text-xs font-bold inline-flex items-center" :title="lead.error_message">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5"></span> Failed
+                                    </span>
+                                </td>
+                                <td class="py-4 pr-6 pl-3 text-right whitespace-nowrap space-x-1">
+                                    <button @click="openEditModal(lead)" 
+                                            class="p-2 rounded-xl bg-slate-100 text-slate-600 hover:text-blue-600 hover:bg-blue-50 transition"
+                                            title="Edit & Tweak Pitch">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                    </button>
+                                    <button @click="sendSingleLead(lead.id)" 
+                                            class="p-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition"
+                                            title="Instant Dispatch Email">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                                    </button>
+                                    <button @click="openScheduleModal(lead)" 
+                                            class="p-2 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white transition"
+                                            title="Schedule Email">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                    </button>
+                                    <button @click="deleteSingleLead(lead.id)" 
+                                            class="p-2 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white transition"
+                                            title="Delete Lead">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr v-if="!leads.length">
+                                <td colspan="7" class="py-16 text-center text-slate-400">
+                                    <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                    <p class="text-base font-semibold">No leads matched your criteria.</p>
+                                    <button @click="showUploadModal = true" class="text-blue-600 text-sm font-bold mt-2 hover:underline">Import your first Excel sheet &rarr;</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 font-semibold">
+                    <span>Showing {{ leads.length }} records</span>
+                    <span>Fully synchronized with SQLite local storage</span>
+                </div>
+            </div>
+        </main>
+
+        <!-- --- TAB 3: DYNAMIC TEMPLATES --- -->
+        <main v-if="currentTab === 'templates'" class="flex-1 max-w-7xl w-full mx-auto p-6 space-y-8">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight">Dynamic Email Pitch Templates</h2>
+                    <p class="text-sm text-slate-500 mt-0.5">Use dynamic variable placeholders to craft personalized multi-variate pitches</p>
+                </div>
+                <button @click="openCreateTemplateModal" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-2xl shadow transition flex items-center space-x-2 text-sm self-start sm:self-auto">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" /></svg>
+                    <span>Create Template</span>
+                </button>
+            </div>
+
+            <!-- Templates Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div v-for="tmpl in templates" :key="tmpl.id" 
+                     class="bg-white rounded-3xl border border-slate-200 p-7 shadow-xs flex flex-col justify-between space-y-6 relative group hover:border-blue-300 transition">
+                    <div class="space-y-4">
+                        <div class="flex items-start justify-between gap-4">
+                            <h3 class="font-extrabold text-lg text-slate-900">{{ tmpl.name }}</h3>
+                            <span v-if="tmpl.is_default" class="bg-blue-50 text-blue-700 text-xs px-3 py-1 rounded-full font-extrabold border border-blue-200 flex-shrink-0">Default Preset</span>
+                        </div>
+
+                        <div>
+                            <span class="text-xs font-bold text-slate-400 block mb-1 uppercase tracking-wider">Subject Line Template</span>
+                            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 font-mono text-sm font-bold text-slate-800">
+                                {{ tmpl.subject }}
+                            </div>
+                        </div>
+
+                        <div>
+                            <span class="text-xs font-bold text-slate-400 block mb-1 uppercase tracking-wider">Email Pitch Body</span>
+                            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 font-mono text-xs text-slate-700 leading-relaxed max-h-60 overflow-y-auto whitespace-pre-wrap">
+                                {{ tmpl.body }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pt-4 border-t border-slate-100 flex items-center justify-end space-x-2">
+                        <button @click="openEditTemplateModal(tmpl)" class="bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-700 px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                            <span>Customize Template</span>
+                        </button>
+                        <button v-if="!tmpl.is_default" @click="deleteTemplate(tmpl.id)" class="bg-rose-50 hover:bg-rose-100 text-rose-600 p-2 rounded-xl transition" title="Delete">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- --- TAB 4: SMTP CREDENTIALS & SETTINGS --- -->
+        <main v-if="currentTab === 'settings'" class="flex-1 max-w-5xl w-full mx-auto p-6 space-y-8">
+            <div>
+                <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight">System & SMTP Email Setup</h2>
+                <p class="text-sm text-slate-500 mt-0.5">Securely link your mail provider to send real automated emails on your behalf</p>
+            </div>
+
+            <!-- Mode Selector Switch -->
+            <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+                <div>
+                    <h3 class="font-extrabold text-slate-900 text-lg">Email Engine Mode</h3>
+                    <p class="text-sm text-slate-500 mt-0.5 max-w-xl">
+                        Switch between live SMTP sending and simulated test mode. Test mode allows you to verify queues and scheduling without sending real emails.
+                    </p>
+                </div>
+
+                <div class="bg-slate-100 p-1.5 rounded-2xl flex items-center space-x-1 self-stretch sm:self-auto flex-shrink-0">
+                    <button @click="settings.email_mode = 'simulated'; saveSettings()"
+                            :class="settings.email_mode === 'simulated' ? 'bg-white text-blue-600 font-bold shadow' : 'text-slate-600 hover:text-slate-900'"
+                            class="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl text-sm transition flex items-center justify-center space-x-2">
+                        <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+                        <span>Test Simulation</span>
+                    </button>
+                    <button @click="settings.email_mode = 'live'; saveSettings()"
+                            :class="settings.email_mode === 'live' ? 'bg-emerald-600 text-white font-bold shadow-md shadow-emerald-500/25' : 'text-slate-600 hover:text-slate-900'"
+                            class="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl text-sm transition flex items-center justify-center space-x-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                        <span>Live SMTP Engine</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Credentials Form Layout -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Form -->
+                <div class="bg-white p-7 rounded-3xl border border-slate-200 shadow-xs space-y-6">
+                    <h3 class="font-bold text-lg text-slate-900 flex items-center space-x-2">
+                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                        <span>SMTP Configuration</span>
+                    </h3>
+
+                    <form @submit.prevent="saveSettings" class="space-y-5">
+                        <div>
+                            <label class="block text-xs font-extrabold text-slate-600 uppercase tracking-wider mb-1.5">Mail Service Provider</label>
+                            <select @change="selectMailProvider" v-model="settings.mail_provider" 
+                                    class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold bg-white">
+                                <option value="gmail">Gmail (Google)</option>
+                                <option value="titan">Titan Mail</option>
+                                <option value="custom">Custom SMTP Server</option>
+                            </select>
+                            <span class="text-[11px] text-slate-400 block mt-1">{{ mailProviders[settings.mail_provider]?.help || 'Configure your mail service' }}</span>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-extrabold text-slate-600 uppercase tracking-wider mb-1.5">Sender Display Name</label>
+                            <input type="text" v-model="settings.sender_name" placeholder="e.g. Vaibhav Bhatt - Bhatt Technologies"
+                                   class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-extrabold text-slate-600 uppercase tracking-wider mb-1.5">{{ settings.mail_provider === 'gmail' ? 'Google Email Address' : 'Email Address' }}</label>
+                            <input type="email" v-model="settings.google_email" :placeholder="settings.mail_provider === 'gmail' ? 'e.g. youragency@gmail.com' : 'e.g. hello@yourdomain.com'"
+                                   class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-extrabold text-slate-600 uppercase tracking-wider mb-1.5">{{ settings.mail_provider === 'gmail' ? 'Google 16-Letter App Password' : 'Password / App Password' }}</label>
+                            <input type="password" v-model="settings.google_app_password" :placeholder="settings.mail_provider === 'gmail' ? '••••••••••••••••' : 'Your email password or app password'"
+                                   class="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono font-medium">
+                            <span v-if="settings.mail_provider === 'gmail'" class="text-[11px] text-slate-400 block mt-1">Never your actual Gmail password. Use a 16-character Google App Password.</span>
+                            <span v-else class="text-[11px] text-slate-400 block mt-1">Enter your Titan or mailbox password (or app-specific password)</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 pt-2">
+                            <div>
+                                <label class="block text-xs font-extrabold text-slate-600 uppercase tracking-wider mb-1.5">SMTP Host</label>
+                                <input type="text" v-model="settings.smtp_host"
+                                       class="w-full px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200 outline-none text-xs font-mono font-bold">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-extrabold text-slate-600 uppercase tracking-wider mb-1.5">SMTP Port</label>
+                                <input type="text" v-model="settings.smtp_port"
+                                       class="w-full px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200 outline-none text-xs font-mono font-bold">
+                            </div>
+                        </div>
+
+                        <div class="pt-4 flex items-center justify-between gap-4">
+                            <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold py-3.5 px-6 rounded-2xl shadow-lg shadow-blue-500/25 transition">
+                                Save SMTP Setup
+                            </button>
+                            <button type="button" @click="testSmtpConnection" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold py-3.5 px-6 rounded-2xl transition flex items-center justify-center space-x-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                                <span>Test Connection</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Tutorial How to Generate App Password (Google-only) -->
+                <div v-if="settings.mail_provider === 'gmail'" class="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-7 rounded-3xl text-white shadow-xl space-y-6 flex flex-col justify-between">
+                    <div class="space-y-4">
+                        <div class="inline-flex items-center space-x-2 bg-blue-500/20 text-blue-300 border border-blue-400/30 px-3 py-1 rounded-full text-xs font-extrabold">
+                            <span>Google 2FA Policy</span>
+                        </div>
+                        <h3 class="text-2xl font-black tracking-tight">How to Get Your App Password</h3>
+                        <p class="text-slate-300 text-sm leading-relaxed">
+                            Google requires third-party apps to use an isolated 16-character App Password rather than your standard Gmail account password. Here's exactly how to generate one in 60 seconds:
+                        </p>
+
+                        <ol class="space-y-3.5 text-xs text-slate-300 pt-2">
+                            <li class="flex items-start space-x-3">
+                                <span class="w-5 h-5 rounded-full bg-blue-600 text-white font-extrabold flex items-center justify-center flex-shrink-0 mt-0.5">1</span>
+                                <div>Go to your <a href="https://myaccount.google.com/security" target="_blank" class="text-blue-400 font-bold hover:underline">Google Account Security page</a>.</div>
+                            </li>
+                            <li class="flex items-start space-x-3">
+                                <span class="w-5 h-5 rounded-full bg-blue-600 text-white font-extrabold flex items-center justify-center flex-shrink-0 mt-0.5">2</span>
+                                <div>Make sure <strong class="text-white">2-Step Verification</strong> is enabled.</div>
+                            </li>
+                            <li class="flex items-start space-x-3">
+                                <span class="w-5 h-5 rounded-full bg-blue-600 text-white font-extrabold flex items-center justify-center flex-shrink-0 mt-0.5">3</span>
+                                <div>In the search bar at the top, type <strong class="text-white">App Passwords</strong> and select it.</div>
+                            </li>
+                            <li class="flex items-start space-x-3">
+                                <span class="w-5 h-5 rounded-full bg-blue-600 text-white font-extrabold flex items-center justify-center flex-shrink-0 mt-0.5">4</span>
+                                <div>Type an app name (e.g. <strong class="text-white">DhruvBuilds Hub</strong>) and click <strong>Create</strong>.</div>
+                            </li>
+                            <li class="flex items-start space-x-3">
+                                <span class="w-5 h-5 rounded-full bg-blue-600 text-white font-extrabold flex items-center justify-center flex-shrink-0 mt-0.5">5</span>
+                                <div>Copy the 16-letter password displayed and paste it into the form on the left.</div>
+                            </li>
+                        </ol>
+                    </div>
+
+                    <div class="bg-white/10 p-4 rounded-2xl border border-white/10 text-xs text-blue-200 leading-normal font-medium">
+                        🛡️ Your App Password is fully stored in your local encrypted SQLite database and only sent directly to Google's highly secure <code class="bg-black/30 px-1 py-0.5 rounded font-mono">smtp.gmail.com</code> SSL servers.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin Password Reset Card -->
+            <div class="bg-white p-7 rounded-3xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+                <div>
+                    <h3 class="font-bold text-slate-900 text-lg">Change Dashboard Login Password</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Update the master PIN / password required to log into this outreach dashboard</p>
+                </div>
+                <div class="flex items-center space-x-3 w-full sm:w-auto">
+                    <input type="password" v-model="newAdminPassword" placeholder="New secure PIN..."
+                           class="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500">
+                    <button @click="updateMasterPassword" class="bg-slate-900 hover:bg-black text-white px-5 py-2.5 rounded-xl font-bold text-sm transition shadow">
+                        Update PIN
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- --- TAB 5: AUDIT LOGS --- -->
+        <main v-if="currentTab === 'logs'" class="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight">Sent Campaigns & Audit Logs</h2>
+                    <p class="text-sm text-slate-500 mt-0.5">Complete historical execution audit of every automated and manual dispatch</p>
+                </div>
+                <button @click="fetchLogs" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2.5 rounded-2xl font-bold text-sm transition flex items-center space-x-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    <span>Refresh Logs</span>
+                </button>
+            </div>
+
+            <!-- Logs Table -->
+            <div class="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-xs font-extrabold text-slate-500 uppercase tracking-wider">
+                                <th class="py-4 pl-6 px-3">Timestamp</th>
+                                <th class="py-4 px-3">Recipient Email</th>
+                                <th class="py-4 px-3">Subject Dispatched</th>
+                                <th class="py-4 px-3">Status</th>
+                                <th class="py-4 pr-6 pl-3">Execution Feedback</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 text-sm font-medium">
+                            <tr v-for="l in auditLogs" :key="l.id" class="hover:bg-slate-50/80 transition">
+                                <td class="py-4 pl-6 px-3 whitespace-nowrap text-xs text-slate-500 font-mono">{{ l.timestamp }}</td>
+                                <td class="py-4 px-3 font-bold text-slate-900">{{ l.recipient_email }}</td>
+                                <td class="py-4 px-3 max-w-xs truncate text-slate-700">{{ l.subject }}</td>
+                                <td class="py-4 px-3 whitespace-nowrap">
+                                    <span class="px-3 py-1 rounded-full text-xs font-bold"
+                                          :class="l.status === 'Success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'">
+                                        {{ l.status }}
+                                    </span>
+                               </td>
+                               <td class="py-4 pr-6 pl-3 max-w-sm truncate text-xs font-mono text-slate-500" :title="l.message">{{ l.message }}</td>
+                            </tr>
+                            <tr v-if="!auditLogs.length">
+                                <td colspan="5" class="py-16 text-center text-slate-400">
+                                    <p class="text-base font-semibold">No audit logs recorded yet.</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- --- MODALS --- -->
+
+    <!-- Modals Overlay -->
+    <div v-if="showUploadModal || showAddLeadModal || showEditModal || showScheduleModal || showBulkScheduleModal || showTemplateModal" 
+         class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+        
+        <!-- 1. IMPORT EXCEL / PDF MODAL -->
+        <div v-if="showUploadModal" class="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8 border border-slate-100 space-y-6 relative">
+            <button @click="showUploadModal = false" class="absolute right-6 top-6 text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            <div>
+                <h3 class="text-2xl font-extrabold text-slate-900">Import Leads File</h3>
+                <p class="text-sm text-slate-500 mt-1">Upload an Excel (.xlsx), CSV (.csv), or structured Pitches PDF</p>
+            </div>
+
+            <form @submit.prevent="handleFileUpload" class="space-y-6">
+                <div class="border-3 border-dashed border-slate-200 hover:border-blue-500 rounded-3xl p-8 text-center transition cursor-pointer relative bg-slate-50/50 hover:bg-blue-50/20 flex flex-col items-center justify-center"
+                     @click="$refs.fileInput.click()">
+                    <input type="file" ref="fileInput" @change="onFileChange" accept=".xlsx,.xls,.csv,.pdf" class="hidden">
+                    
+                    <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-4 shadow-sm">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" /></svg>
+                    </div>
+
+                    <div v-if="!selectedFile">
+                        <span class="font-extrabold text-slate-800 text-base block">Click to Browse or Drag & Drop</span>
+                        <span class="text-xs text-slate-400 mt-1 block">Supports .XLSX, .CSV, and .PDF Lead Reports</span>
+                    </div>
+                    <div v-else class="space-y-1">
+                        <span class="font-black text-blue-600 text-base block truncate max-w-[280px]">{{ selectedFile.name }}</span>
+                        <span class="text-xs font-bold text-slate-500 block">{{ (selectedFile.size / 1024).toFixed(1) }} KB</span>
+                    </div>
+                </div>
+
+                <button type="submit" :disabled="!selectedFile || isUploading"
+                        class="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-extrabold py-4 px-6 rounded-2xl shadow-lg shadow-blue-500/25 transition flex items-center justify-center space-x-2">
+                    <svg v-if="isUploading" class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    <span>{{ isUploading ? 'Extracting & Parsing Leads...' : 'Process & Import Data' }}</span>
+                </button>
+            </form>
+        </div>
+
+        <!-- 2. ADD SINGLE LEAD MODAL -->
+        <div v-if="showAddLeadModal" class="bg-white rounded-3xl shadow-2xl max-w-xl w-full p-8 border border-slate-100 space-y-6 relative max-h-[90vh] overflow-y-auto">
+            <button @click="showAddLeadModal = false" class="absolute right-6 top-6 text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            <div>
+                <h3 class="text-2xl font-extrabold text-slate-900">Add New Lead</h3>
+                <p class="text-sm text-slate-500 mt-1">Manually insert a client lead and custom outreach pitch</p>
+            </div>
+
+            <form @submit.prevent="saveNewLead" class="space-y-4 text-sm font-semibold">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Company / Client</label>
+                        <input type="text" v-model="newLead.company_name" placeholder="e.g. Fitpass" class="w-full px-4 py-3 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Website URL</label>
+                        <input type="text" v-model="newLead.website" placeholder="e.g. fitpass.co" class="w-full px-4 py-3 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500" required>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Target Sector</label>
+                        <input type="text" v-model="newLead.industry" placeholder="e.g. Fitness & Wellness" class="w-full px-4 py-3 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Contact Email</label>
+                        <input type="email" v-model="newLead.contact_email" placeholder="e.g. contact@fitpass.co" class="w-full px-4 py-3 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500" required>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Current App Status</label>
+                        <input type="text" v-model="newLead.app_status" placeholder="e.g. Outdated UI / No App" class="w-full px-4 py-3 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">WhatsApp Number</label>
+                        <input type="text" v-model="newLead.whatsapp_number" placeholder="e.g. +91 9510539603" class="w-full px-4 py-3 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500" required>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Subject Line</label>
+                    <input type="text" v-model="newLead.subject" placeholder="e.g. Your Fitpass app — quick thought" class="w-full px-4 py-3 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-bold" required>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Custom Pitch Body</label>
+                    <textarea v-model="newLead.pitch" rows="5" placeholder="Write your personalized email pitch..." class="w-full p-4 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs" required></textarea>
+                </div>
+
+                <div class="pt-2 flex justify-end space-x-3">
+                    <button type="button" @click="showAddLeadModal = false" class="px-5 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">Cancel</button>
+                    <button type="submit" class="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold shadow-lg shadow-blue-500/25">Save & Add Lead</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- 3. EDIT & TWEAK LEAD PITCH MODAL -->
+        <div v-if="showEditModal" class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-8 border border-slate-100 space-y-6 relative max-h-[90vh] overflow-y-auto">
+            <button @click="showEditModal = false" class="absolute right-6 top-6 text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            <div>
+                <div class="flex items-center space-x-2 text-xs font-bold text-blue-600 uppercase tracking-wider">
+                    <span>Targeting:</span>
+                    <span class="bg-blue-50 px-2 py-0.5 rounded">{{ activeLead.company_name }}</span>
+                </div>
+                <h3 class="text-2xl font-extrabold text-slate-900 mt-1">Customize Lead Pitch</h3>
+            </div>
+
+            <!-- Auto generate from template toolbar -->
+            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center justify-between gap-4">
+                <span class="text-xs font-bold text-slate-600">Apply Presets:</span>
+                <div class="flex flex-wrap gap-2">
+                    <button v-for="t in templates" :key="t.id" type="button" @click="applyTemplateToActiveLead(t.id)"
+                            class="bg-white border border-slate-200 hover:border-blue-500 text-slate-800 px-3 py-1.5 rounded-xl text-xs font-extrabold shadow-xs transition">
+                        {{ t.name }}
+                    </button>
+                </div>
+            </div>
+
+            <form @submit.prevent="saveEditedLead" class="space-y-4">
+                <div class="grid grid-cols-2 gap-4 text-xs font-bold text-slate-600">
+                    <div>
+                        <label class="block uppercase mb-1">Contact Email</label>
+                        <input type="email" v-model="activeLead.contact_email" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-800 outline-none">
+                    </div>
+                    <div>
+                        <label class="block uppercase mb-1">WhatsApp Number</label>
+                        <input type="text" v-model="activeLead.whatsapp_number" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-800 outline-none">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Subject Line</label>
+                    <input type="text" v-model="activeLead.subject" class="w-full px-4 py-3 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-extrabold text-slate-900">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Email Body Pitch</label>
+                    <textarea v-model="activeLead.pitch" rows="8" class="w-full p-4 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs text-slate-800 leading-relaxed"></textarea>
+                </div>
+
+                <div class="pt-2 flex justify-between items-center">
+                    <button type="button" @click="sendSingleLead(activeLead.id); showEditModal = false" class="px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm flex items-center space-x-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg>
+                        <span>Dispatch Now</span>
+                    </button>
+
+                    <div class="flex space-x-3">
+                        <button type="button" @click="showEditModal = false" class="px-5 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm">Cancel</button>
+                        <button type="submit" class="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm shadow-lg shadow-blue-500/25">Save Changes</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- 4. SCHEDULE SINGLE LEAD MODAL -->
+        <div v-if="showScheduleModal" class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 border border-slate-100 space-y-6 relative">
+            <button @click="showScheduleModal = false" class="absolute right-6 top-6 text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            <div>
+                <h3 class="text-2xl font-extrabold text-slate-900">Schedule Email Dispatch</h3>
+                <p class="text-sm text-slate-500 mt-1">Pick a specific date and time to trigger this outreach pitch</p>
+            </div>
+
+            <form @submit.prevent="confirmSchedule" class="space-y-5">
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase mb-2">Select Date & Time</label>
+                    <input type="datetime-local" v-model="scheduleDateTime" 
+                           class="w-full px-4 py-3.5 bg-slate-50 rounded-2xl border border-slate-200 font-bold text-slate-900 text-base outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer" required>
+                </div>
+
+                <div class="bg-indigo-50 text-indigo-900 p-4 rounded-2xl text-xs font-medium flex items-start space-x-2.5">
+                    <svg class="w-5 h-5 flex-shrink-0 text-indigo-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <div>
+                        Your Python background scheduler will automatically connect to your configured SMTP provider and execute this email at the scheduled time.
+                    </div>
+                </div>
+
+                <div class="pt-2 flex justify-end space-x-3">
+                    <button type="button" @click="showScheduleModal = false" class="px-5 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm">Cancel</button>
+                    <button type="submit" class="px-6 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-sm shadow-lg shadow-indigo-500/25">Set Schedule</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- 5. BULK SCHEDULE BATCH MODAL -->
+        <div v-if="showBulkScheduleModal" class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 border border-slate-100 space-y-6 relative">
+            <button @click="showBulkScheduleModal = false" class="absolute right-6 top-6 text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            <div>
+                <h3 class="text-2xl font-extrabold text-slate-900">Schedule Batch emails</h3>
+                <p class="text-sm text-slate-500 mt-1">Schedule all <strong class="text-blue-600">{{ selectedLeads.length }}</strong> selected leads to fire at once</p>
+            </div>
+
+            <form @submit.prevent="confirmBulkSchedule" class="space-y-5">
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase mb-2">Select Date & Time</label>
+                    <input type="datetime-local" v-model="bulkScheduleDateTime" 
+                           class="w-full px-4 py-3.5 bg-slate-50 rounded-2xl border border-slate-200 font-bold text-slate-900 text-base outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer" required>
+                </div>
+
+                <div class="pt-2 flex justify-end space-x-3">
+                    <button type="button" @click="showBulkScheduleModal = false" class="px-5 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm">Cancel</button>
+                    <button type="submit" class="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm shadow-lg shadow-blue-500/25">Schedule Batch</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- 6. CREATE / EDIT TEMPLATE MODAL -->
+        <div v-if="showTemplateModal" class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-8 border border-slate-100 space-y-6 relative max-h-[90vh] overflow-y-auto">
+            <button @click="showTemplateModal = false" class="absolute right-6 top-6 text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            <div>
+                <h3 class="text-2xl font-extrabold text-slate-900">{{ activeTemplate.id ? 'Edit Pitch Template' : 'Create New Template' }}</h3>
+                <p class="text-sm text-slate-500 mt-1">Click placeholder pills to insert dynamic keywords</p>
+            </div>
+
+            <div class="flex flex-wrap gap-1.5 p-3 bg-slate-50 rounded-2xl border border-slate-200">
+                <span class="text-[11px] font-extrabold text-slate-400 block w-full mb-1 uppercase tracking-wider">Dynamic Placeholders</span>
+                <button v-for="tag in ['{{company_name}}', '{{website}}', '{{industry}}', '{{location}}', '{{app_status}}', '{{contact_email}}', '{{whatsapp_number}}']" :key="tag"
+                        type="button" @click="insertTagIntoTemplate(tag)"
+                        class="bg-white border border-slate-200 hover:border-blue-500 text-blue-700 px-2.5 py-1 rounded-lg font-mono text-xs font-bold shadow-xs transition">
+                    + {{ tag }}
+                </button>
+            </div>
+
+            <form @submit.prevent="saveTemplate" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Template Title</label>
+                    <input type="text" v-model="activeTemplate.name" placeholder="e.g. Agency Update Pitch" class="w-full px-4 py-3 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-bold" required>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Subject Line Template</label>
+                    <input type="text" v-model="activeTemplate.subject" placeholder="e.g. Mobile app ideas for {{company_name}}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm font-bold" required>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Body Content</label>
+                    <textarea v-model="activeTemplate.body" rows="8" placeholder="Hi {{company_name}}..." class="w-full p-4 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs leading-relaxed" required></textarea>
+                </div>
+
+                <div class="pt-2 flex justify-end space-x-3">
+                    <button type="button" @click="showTemplateModal = false" class="px-5 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm">Cancel</button>
+                    <button type="submit" class="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm shadow-lg shadow-blue-500/25">Save Template</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+const { createApp, ref, reactive, onMounted } = Vue;
+
+createApp({
+    setup() {
+        const authState = reactive({ logged_in: false, has_password_setup: true });
+        const showPassword = ref(false);
+        const loginPassword = ref('');
+        const newAdminPassword = ref('');
+
+        const currentTab = ref('dashboard');
+        
+        // Modals
+        const showUploadModal = ref(false);
+        const showAddLeadModal = ref(false);
+        const showEditModal = ref(false);
+        const showScheduleModal = ref(false);
+        const showBulkScheduleModal = ref(false);
+        const showTemplateModal = ref(false);
+
+        const toast = reactive({ show: false, message: '', type: 'success' });
+
+        const stats = reactive({
+            total_leads: 0, sent_emails: 0, scheduled_emails: 0, failed_emails: 0,
+            pending_leads: 0, open_rate: 0, reply_rate: 0, industry_distribution: [], recent_logs: []
+        });
+
+        const settings = reactive({
+            sender_name: '', google_email: '', google_app_password: '',
+            smtp_host: 'smtp.gmail.com', smtp_port: '587', email_mode: 'simulated',
+            mail_provider: 'gmail'
+        });
+
+        const mailProviders = {
+            'gmail': { name: 'Gmail', host: 'smtp.gmail.com', port: '587', help: 'Use a 16-character Google App Password' },
+            'titan': { name: 'Titan Mail', host: 'smtp.titan.email', port: '587', help: 'Enter your Titan Mail email and password' },
+            'custom': { name: 'Custom SMTP', host: '', port: '587', help: 'Enter your custom SMTP server details' }
+        };
+
+        const leads = ref([]);
+        const templates = ref([]);
+        const auditLogs = ref([]);
+        const selectedLeads = ref([]);
+
+        const filters = reactive({ search: '', status: 'All', industry: 'All' });
+        const selectAllChecked = ref(false);
+
+        const newLead = reactive({
+            company_name: '', website: '', industry: '', location: 'India',
+            app_status: '', contact_email: '', whatsapp_number: '+91 9510539603',
+            subject: '', pitch: ''
+        });
+
+        const activeLead = reactive({});
+        const scheduleDateTime = ref('');
+        const bulkScheduleDateTime = ref('');
+        const activeTemplate = reactive({});
+
+        const selectedFile = ref(null);
+        const isUploading = ref(false);
+
+        const showToast = (msg, type = 'success') => {
+            toast.message = msg;
+            toast.type = type;
+            toast.show = true;
+            setTimeout(() => { toast.show = false; }, 4000);
+        };
+
+        const fetchAuthStatus = async () => {
+            try {
+                const res = await fetch('/api/auth/status');
+                const data = await res.json();
+                authState.logged_in = data.logged_in;
+                authState.has_password_setup = data.has_password_setup;
+                if (authState.logged_in) {
+                    loadEverything();
+                }
+            } catch (e) {
+                console.error('Error fetching auth status', e);
+            }
+        };
+
+        const handleLogin = async () => {
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: loginPassword.value })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    authState.logged_in = true;
+                    showToast(data.message, 'success');
+                    loadEverything();
+                } else {
+                    showToast(data.message, 'error');
+                }
+            } catch (e) {
+                showToast('Network error during login.', 'error');
+            }
+        };
+
+        const handleLogout = async () => {
+            await fetch('/api/auth/logout', { method: 'POST' });
+            authState.logged_in = false;
+            showToast('Logged out successfully.', 'success');
+        };
+
+        const updateMasterPassword = async () => {
+            if (!newAdminPassword.value) return showToast('Please enter a new password.', 'error');
+            try {
+                const res = await fetch('/api/settings', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ admin_password: newAdminPassword.value })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    newAdminPassword.value = '';
+                    showToast('Master password updated successfully.', 'success');
+                }
+            } catch (e) {
+                showToast('Error updating master password.', 'error');
+            }
+        };
+
+        const loadEverything = () => {
+            fetchSettings();
+            fetchStats();
+            fetchLeads();
+            fetchTemplates();
+            fetchLogs();
+            // Polling stats
+            setInterval(fetchStats, 10000);
+        };
+
+        const fetchSettings = async () => {
+            const res = await fetch('/api/settings');
+            const data = await res.json();
+            Object.assign(settings, data);
+            if (!settings.email_mode) settings.email_mode = 'simulated';
+        };
+
+        const saveSettings = async () => {
+            try {
+                const res = await fetch('/api/settings', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(settings)
+                });
+                const data = await res.json();
+                if (data.success) showToast(data.message, 'success');
+            } catch (e) {
+                showToast('Error saving settings.', 'error');
+            }
+        };
+
+        const selectMailProvider = () => {
+            const provider = mailProviders[settings.mail_provider];
+            if (provider && provider.host) {
+                settings.smtp_host = provider.host;
+                settings.smtp_port = provider.port;
+            }
+        };
+
+        const testSmtpConnection = async () => {
+            const providerLabel = mailProviders[settings.mail_provider]?.name || 'SMTP';
+            showToast(`Testing SMTP connection via ${providerLabel}...`, 'success');
+            try {
+                const res = await fetch('/api/settings/test-email', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) showToast(data.message, 'success');
+                else showToast('Connection failed: ' + data.message, 'error');
+            } catch (e) {
+                showToast('Error testing connection.', 'error');
+            }
+        };
+
+        const fetchStats = async () => {
+            if (!authState.logged_in) return;
+            const res = await fetch('/api/dashboard/stats');
+            const data = await res.json();
+            Object.assign(stats, data);
+        };
+
+        const fetchLeads = async () => {
+            const params = new URLSearchParams({
+                search: filters.search, status: filters.status, industry: filters.industry
+            });
+            const res = await fetch('/api/leads?' + params);
+            leads.value = await res.json();
+            selectedLeads.value = [];
+            selectAllChecked.value = false;
+        };
+
+        const fetchTemplates = async () => {
+            const res = await fetch('/api/templates');
+            templates.value = await res.json();
+        };
+
+        const fetchLogs = async () => {
+            const res = await fetch('/api/logs');
+            auditLogs.value = await res.json();
+        };
+
+        // File Uploader
+        const onFileChange = (e) => {
+            selectedFile.value = e.target.files[0];
+        };
+
+        const handleFileUpload = async () => {
+            if (!selectedFile.value) return;
+            isUploading.value = true;
+            const formData = new FormData();
+            formData.append('file', selectedFile.value);
+
+            try {
+                const res = await fetch('/api/leads/upload', {
+                    method: 'POST', body: formData
+                });
+                const data = await res.json();
+                isUploading.value = false;
+                if (data.success) {
+                    selectedFile.value = null;
+                    showUploadModal.value = false;
+                    showToast(data.message, 'success');
+                    fetchLeads();
+                    fetchStats();
+                } else {
+                    showToast(data.message, 'error');
+                }
+            } catch (e) {
+                isUploading.value = false;
+                showToast('Error uploading file.', 'error');
+            }
+        };
+
+        // Single Leads
+        const saveNewLead = async () => {
+            try {
+                const res = await fetch('/api/leads', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newLead)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showAddLeadModal.value = false;
+                    showToast(data.message, 'success');
+                    fetchLeads();
+                    fetchStats();
+                    // Reset
+                    Object.assign(newLead, { company_name: '', website: '', industry: '', app_status: '', contact_email: '', whatsapp_number: '+91 9510539603', subject: '', pitch: '' });
+                }
+            } catch (e) {
+                showToast('Error saving lead.', 'error');
+            }
+        };
+
+        const openEditModal = (lead) => {
+            Object.assign(activeLead, lead);
+            showEditModal.value = true;
+        };
+
+        const saveEditedLead = async () => {
+            try {
+                const res = await fetch('/api/leads/' + activeLead.id, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(activeLead)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showEditModal.value = false;
+                    showToast(data.message, 'success');
+                    fetchLeads();
+                }
+            } catch (e) {
+                showToast('Error updating lead.', 'error');
+            }
+        };
+
+        const applyTemplateToActiveLead = async (tmplId) => {
+            try {
+                const res = await fetch('/api/templates/' + tmplId + '/generate', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lead: activeLead })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    activeLead.subject = data.subject;
+                    activeLead.pitch = data.pitch;
+                    showToast('Template preset applied.', 'success');
+                }
+            } catch (e) {
+                showToast('Error applying preset.', 'error');
+            }
+        };
+
+        const sendSingleLead = async (leadId) => {
+            showToast('Dispatching email...', 'success');
+            try {
+                const res = await fetch('/api/leads/' + leadId + '/send', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    fetchLeads();
+                    fetchStats();
+                    fetchLogs();
+                } else {
+                    showToast('Failed: ' + data.message, 'error');
+                }
+            } catch (e) {
+                showToast('Error dispatching email.', 'error');
+            }
+        };
+
+        const deleteSingleLead = async (leadId) => {
+            if (!confirm('Are you sure you want to delete this lead?')) return;
+            try {
+                const res = await fetch('/api/leads/' + leadId, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    fetchLeads();
+                    fetchStats();
+                }
+            } catch (e) {
+                showToast('Error deleting lead.', 'error');
+            }
+        };
+
+        const openScheduleModal = (lead) => {
+            Object.assign(activeLead, lead);
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(10, 0, 0, 0);
+            scheduleDateTime.value = tomorrow.toISOString().slice(0, 16);
+            showScheduleModal.value = true;
+        };
+
+        const confirmSchedule = async () => {
+            const formatted = scheduleDateTime.value.replace('T', ' ');
+            try {
+                const res = await fetch('/api/leads/' + activeLead.id + '/schedule', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ scheduled_time: formatted })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showScheduleModal.value = false;
+                    showToast(data.message, 'success');
+                    fetchLeads();
+                    fetchStats();
+                }
+            } catch (e) {
+                showToast('Error scheduling email.', 'error');
+            }
+        };
+
+        // Bulk Actions
+        const toggleSelectAll = () => {
+            selectAllChecked.value = !selectAllChecked.value;
+            if (selectAllChecked.value) {
+                selectedLeads.value = leads.value.map(l => l.id);
+            } else {
+                selectedLeads.value = [];
+            }
+        };
+
+        const executeBulkAction = async (action) => {
+            const msgMap = {
+                send: 'Dispatch instant emails to ' + selectedLeads.value.length + ' leads?',
+                reset: 'Reset ' + selectedLeads.value.length + ' leads to Pending?',
+                delete: 'Permanently delete ' + selectedLeads.value.length + ' selected leads?'
+            };
+            if (!confirm(msgMap[action])) return;
+
+            showToast('Processing batch action...', 'success');
+            try {
+                const res = await fetch('/api/leads/bulk', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action, ids: selectedLeads.value })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    fetchLeads();
+                    fetchStats();
+                    fetchLogs();
+                } else {
+                    showToast('Bulk action error: ' + data.message, 'error');
+                }
+            } catch (e) {
+                showToast('Error executing bulk action.', 'error');
+            }
+        };
+
+        const confirmBulkSchedule = async () => {
+            const formatted = bulkScheduleDateTime.value.replace('T', ' ');
+            try {
+                const res = await fetch('/api/leads/bulk', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'schedule', ids: selectedLeads.value, scheduled_time: formatted })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showBulkScheduleModal.value = false;
+                    showToast(data.message, 'success');
+                    fetchLeads();
+                    fetchStats();
+                }
+            } catch (e) {
+                showToast('Error batch scheduling.', 'error');
+            }
+        };
+
+        // Templates
+        const openCreateTemplateModal = () => {
+            Object.assign(activeTemplate, { id: null, name: '', subject: '', body: '' });
+            showTemplateModal.value = true;
+        };
+
+        const openEditTemplateModal = (tmpl) => {
+            Object.assign(activeTemplate, tmpl);
+            showTemplateModal.value = true;
+        };
+
+        const insertTagIntoTemplate = (tag) => {
+            if (!activeTemplate.body) activeTemplate.body = '';
+            activeTemplate.body += ' ' + tag;
+        };
+
+        const saveTemplate = async () => {
+            const url = activeTemplate.id ? '/api/templates/' + activeTemplate.id : '/api/templates';
+            const method = activeTemplate.id ? 'PUT' : 'POST';
+
+            try {
+                const res = await fetch(url, {
+                    method, headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(activeTemplate)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showTemplateModal.value = false;
+                    showToast(data.message, 'success');
+                    fetchTemplates();
+                }
+            } catch (e) {
+                showToast('Error saving template.', 'error');
+            }
+        };
+
+        const deleteTemplate = async (tmplId) => {
+            if (!confirm('Are you sure you want to delete this dynamic template?')) return;
+            try {
+                const res = await fetch('/api/templates/' + tmplId, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    fetchTemplates();
+                }
+            } catch (e) {
+                showToast('Error deleting template.', 'error');
+            }
+        };
+
+        onMounted(() => {
+            fetchAuthStatus();
+        });
+
+        return {
+            authState, showPassword, loginPassword, newAdminPassword, currentTab,
+            showUploadModal, showAddLeadModal, showEditModal, showScheduleModal, showBulkScheduleModal, showTemplateModal,
+            toast, stats, settings, leads, templates, auditLogs, selectedLeads, filters, selectAllChecked,
+            newLead, activeLead, scheduleDateTime, bulkScheduleDateTime, activeTemplate, selectedFile, isUploading,
+            mailProviders, selectMailProvider,
+            handleLogin, handleLogout, updateMasterPassword, testSmtpConnection, saveSettings,
+            fetchLeads, fetchLogs, onFileChange, handleFileUpload, saveNewLead, openEditModal, saveEditedLead,
+            applyTemplateToActiveLead, sendSingleLead, deleteSingleLead, openScheduleModal, confirmSchedule,
+            toggleSelectAll, executeBulkAction, confirmBulkSchedule, openCreateTemplateModal, openEditTemplateModal,
+            insertTagIntoTemplate, saveTemplate, deleteTemplate
+        };
+    }
+}).mount('#app');
+</script>
+
+</body>
+</html>
