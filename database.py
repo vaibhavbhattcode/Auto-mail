@@ -3,49 +3,157 @@ import json
 import datetime
 import os
 import hashlib
+import base64
+from cryptography.fernet import Fernet
+from werkzeug.security import generate_password_hash, check_password_hash
 
 DB_PATH = os.environ.get('DATABASE_PATH', 'campaigns.db')
+ENCRYPTION_KEY = os.environ.get('SECRET_KEY', 'arena_agent_secure_secret_key_2026_dhruvbuilds')
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
+def get_fernet_cipher():
+    key = hashlib.sha256(ENCRYPTION_KEY.encode()).digest()
+    key_b64 = base64.urlsafe_b64encode(key)
+    return Fernet(key_b64)
+
+def encrypt_password(password):
+    if not password:
+        return ""
+    cipher = get_fernet_cipher()
+    return cipher.encrypt(password.encode()).decode()
+
+def decrypt_password(encrypted_password):
+    if not encrypted_password:
+        return ""
+    cipher = get_fernet_cipher()
+    try:
+        return cipher.decrypt(encrypted_password.encode()).decode()
+    except Exception as e:
+        print(f"[Decrypt Error] Failed to decrypt password: {str(e)}")
+        return ""
+
 def hash_password(password):
-    """Hash password using SHA256"""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Hash password using Werkzeug security (PBKDF2/scrypt)"""
+    return generate_password_hash(password)
 
 def verify_password(password, hashed):
     """Verify password against hash"""
-    return hash_password(password) == hashed
+    return check_password_hash(hashed, password)
 
 def init_db():
     conn = get_db()
     cursor = conn.cursor()
     
-    # Users table
+    # 1. Users table
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
+        username TEXT UNIQUE,
+        email TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
-        email TEXT,
         full_name TEXT,
-        role TEXT DEFAULT 'admin',
-        is_active INTEGER DEFAULT 1,
         created_at TEXT,
         last_login TEXT
     )
     ''')
     
-    # Check if any user exists
-    cursor.execute('SELECT COUNT(*) FROM users')
-    if cursor.fetchone()[0] == 0:
-        # No users exist - this is first time setup
-        # Password will be set on first login
-        pass
+    # 2. SMTP Accounts table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS smtp_accounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        email_address TEXT NOT NULL,
+        sender_name TEXT,
+        smtp_host TEXT NOT NULL,
+        smtp_port INTEGER NOT NULL,
+        ssl_tls TEXT NOT NULL,
+        password_encrypted TEXT NOT NULL,
+        created_at TEXT,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+    ''')
     
-    # Settings table
+    # 3. Campaigns table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS campaigns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT,
+        status TEXT DEFAULT 'draft',
+        smtp_account_id INTEGER,
+        created_by INTEGER NOT NULL,
+        created_at TEXT,
+        updated_at TEXT,
+        start_time TEXT,
+        sending_interval INTEGER DEFAULT 0, -- in minutes, 0 means individual/no interval
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (smtp_account_id) REFERENCES smtp_accounts(id) ON DELETE SET NULL
+    )
+    ''')
+    
+    # 4. Leads table (updated to link with Campaign)
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS leads (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        campaign_id INTEGER NOT NULL,
+        recipient_email TEXT NOT NULL,
+        cc TEXT,
+        bcc TEXT,
+        subject TEXT,
+        body TEXT,
+        attachments TEXT, -- JSON string of file names
+        variables TEXT, -- JSON string of all row values for custom placeholders
+        status TEXT DEFAULT 'Pending',
+        scheduled_time TEXT,
+        sent_time TEXT,
+        error_message TEXT,
+        open_count INTEGER DEFAULT 0,
+        last_opened TEXT,
+        click_count INTEGER DEFAULT 0,
+        last_clicked TEXT,
+        bounce_status TEXT DEFAULT 'none', -- 'none', 'hard', 'soft'
+        bounce_reason TEXT,
+        unsubscribed INTEGER DEFAULT 0,
+        retry_count INTEGER DEFAULT 0,
+        created_at TEXT,
+        updated_at TEXT,
+        FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+    )
+    ''')
+    
+    # 5. Suppression list table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS suppression_list (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        reason TEXT,
+        unsubscribed_at TEXT,
+        campaign_id INTEGER,
+        FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE SET NULL
+    )
+    ''')
+    
+    # 6. Tracking logs table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS tracking_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        lead_id INTEGER NOT NULL,
+        campaign_id INTEGER NOT NULL,
+        activity_type TEXT NOT NULL, -- 'sent', 'opened', 'clicked', 'bounced', 'unsubscribed'
+        timestamp TEXT NOT NULL,
+        details TEXT,
+        ip_address TEXT,
+        user_agent TEXT,
+        FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE,
+        FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+    )
+    ''')
+    
+    # 7. Settings table (keeps global limits/configs)
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
@@ -53,151 +161,78 @@ def init_db():
     )
     ''')
     
-    # Default settings with anti-spam configuration
+    # --- SCHEMA MIGRATIONS (Upgrade existing databases dynamically) ---
+    # Check leads columns
+    cursor.execute("PRAGMA table_info(leads)")
+    leads_columns = [row['name'] for row in cursor.fetchall()]
+    
+    # Rename contact_email to recipient_email if old schema exists
+    if 'contact_email' in leads_columns and 'recipient_email' not in leads_columns:
+        print("[Migration] Renaming 'contact_email' to 'recipient_email' in 'leads' table...")
+        cursor.execute("ALTER TABLE leads RENAME COLUMN contact_email TO recipient_email")
+        cursor.execute("PRAGMA table_info(leads)")
+        leads_columns = [row['name'] for row in cursor.fetchall()]
+        
+    # Rename pitch to body if old schema exists
+    if 'pitch' in leads_columns and 'body' not in leads_columns:
+        print("[Migration] Renaming 'pitch' to 'body' in 'leads' table...")
+        cursor.execute("ALTER TABLE leads RENAME COLUMN pitch TO body")
+        cursor.execute("PRAGMA table_info(leads)")
+        leads_columns = [row['name'] for row in cursor.fetchall()]
+    
+    leads_upgrades = {
+        'campaign_id': 'INTEGER',
+        'cc': 'TEXT',
+        'bcc': 'TEXT',
+        'attachments': 'TEXT',
+        'variables': 'TEXT',
+        'open_count': 'INTEGER DEFAULT 0',
+        'last_opened': 'TEXT',
+        'click_count': 'INTEGER DEFAULT 0',
+        'last_clicked': 'TEXT',
+        'bounce_status': "TEXT DEFAULT 'none'",
+        'bounce_reason': 'TEXT',
+        'unsubscribed': 'INTEGER DEFAULT 0',
+        'retry_count': 'INTEGER DEFAULT 0',
+        'updated_at': 'TEXT'
+    }
+    
+    for col, definition in leads_upgrades.items():
+        if col not in leads_columns:
+            print(f"[Migration] Adding missing column '{col}' to table 'leads'...")
+            cursor.execute(f"ALTER TABLE leads ADD COLUMN {col} {definition}")
+            
+    # Check users columns
+    cursor.execute("PRAGMA table_info(users)")
+    users_columns = [row['name'] for row in cursor.fetchall()]
+    if 'username' not in users_columns:
+        print("[Migration] Adding missing column 'username' to table 'users'...")
+        cursor.execute("ALTER TABLE users ADD COLUMN username TEXT UNIQUE")
+    if 'email' not in users_columns:
+        print("[Migration] Adding missing column 'email' to table 'users'...")
+        cursor.execute("ALTER TABLE users ADD COLUMN email TEXT")
+        
+    # Default global settings
     default_settings = {
-        'google_email': '',
-        'google_app_password': '',
-        'sender_name': 'Vaibhav Bhatt - Bhatt Technologies',
-        'smtp_host': 'smtp.gmail.com',
-        'smtp_port': '587',
-        'max_emails_per_hour': '20',
-        'min_cooldown_seconds': '60',
-        'max_cooldown_seconds': '180',
+        'daily_email_limit': '500',
+        'max_emails_per_hour': '50',
+        'min_cooldown_seconds': '10',
+        'max_cooldown_seconds': '30',
         'emails_per_batch': '5',
-        'batch_cooldown_minutes': '10',
-        'daily_email_limit': '100',
+        'batch_cooldown_minutes': '5',
         'randomize_cooldown': 'true',
-        'warmup_mode': 'false',
-        'auto_send_enabled': 'true',
-        'mail_provider': 'gmail',
+        'tracking_domain': 'http://localhost:5000',
         'company_name': 'Bhatt Technologies',
-        'session_timeout': '3600',
-        'require_password_change': 'true'
+        'support_email': 'support@bhatttechnologies.com',
+        'timezone': 'Asia/Kolkata'
     }
     
     for k, v in default_settings.items():
         cursor.execute('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)', (k, v))
         
-    # Leads table with enhanced fields
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS leads (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        company_name TEXT,
-        website TEXT,
-        industry TEXT,
-        location TEXT,
-        app_status TEXT,
-        contact_email TEXT,
-        whatsapp_number TEXT,
-        linkedin TEXT,
-        subject TEXT,
-        pitch TEXT,
-        status TEXT,
-        scheduled_time TEXT,
-        sent_time TEXT,
-        error_message TEXT,
-        tags TEXT,
-        priority TEXT DEFAULT 'medium',
-        source TEXT DEFAULT 'manual',
-        created_at TEXT,
-        updated_at TEXT
-    )
-    ''')
-    
-    # Templates table with enhanced fields  
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS templates (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        subject TEXT,
-        body TEXT,
-        category TEXT DEFAULT 'general',
-        is_default INTEGER,
-        is_active INTEGER DEFAULT 1,
-        created_at TEXT,
-        updated_at TEXT
-    )
-    ''')
-    
-    # Seed templates if empty
-    cursor.execute('SELECT COUNT(*) FROM templates')
-    if cursor.fetchone()[0] == 0:
-        templates = [
-            (
-                "Modernizing Mobile App Experience",
-                "Your {{company_name}} app — quick thought",
-                "Hi Team at {{company_name}},\n\nI came across {{company_name}} and your platform at {{website}}. I noticed your current mobile setup is {{app_status}} — which seems like an untapped opportunity for your business in the {{industry}} space.\n\nIn your highly competitive industry, a modern, frictionless mobile app is exactly what keeps customers engaged, streamlines reorders/bookings, and drives retention.\n\nI run Bhatt Technologies (bhatttechnologies.com), a specialized app development agency. We rebuild and modernize apps for businesses like yours — giving them exceptional UX, blazingly fast performance, and clean, high-conversion flows.\n\nIf improving your app or building a custom solution is on your roadmap this year, I'd love to share a few quick tailored ideas.\n\nHappy to connect over a short call or chat. Feel free to reply here or drop me a message on WhatsApp at {{whatsapp_number}}.\n\nBest regards,\nVaibhav Bhatt\nFounder, Bhatt Technologies",
-                1
-            ),
-            (
-                "Transforming Web Strategy to Native App",
-                "Mobile App for {{company_name}}?",
-                "Hi Team,\n\nI was looking at {{company_name}} and you have built an impressive presence in {{location}}, but from what I can see, everything is currently running through your website ({{website}}).\n\nFor a leader in {{industry}}, relying solely on a web browser on mobile adds friction for repeat customers. A dedicated native app simplifies daily interactions, push notifications, custom workflows, and loyalty—things that dramatically cut down drop-offs and improve Customer Lifetime Value.\n\nI'm Vaibhav Bhatt, founder of Bhatt Technologies (bhatttechnologies.com). We build lightning-fast, lightweight native apps for brands that want to build a direct, premium relationship with their audience.\n\nWould it make sense to have a quick 5-minute chat about what an app could look like for {{company_name}}?\n\nFeel free to reply to this email or reach out to me directly on WhatsApp at {{whatsapp_number}}.\n\nCheers,\nVaibhav Bhatt\nBhatt Technologies | bhatttechnologies.com",
-                0
-            )
-        ]
-        cursor.executemany('INSERT INTO templates (name, subject, body, category, is_default, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', 
-            [(t[0], t[1], t[2], 'sales', t[3], 1, 
-              datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-              datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) for t in templates])
-
-    # Logs table
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        lead_id INTEGER,
-        recipient_email TEXT,
-        subject TEXT,
-        status TEXT,
-        timestamp TEXT,
-        message TEXT
-    )
-    ''')
-    
-    # Seed leads from initial_leads.json if empty
-    cursor.execute('SELECT COUNT(*) FROM leads')
-    if cursor.fetchone()[0] == 0:
-        if os.path.exists('initial_leads.json'):
-            with open('initial_leads.json', 'r') as f:
-                initial_leads = json.load(f)
-            
-            for lead in initial_leads:
-                cursor.execute('''
-                INSERT INTO leads (
-                    company_name, website, industry, location, app_status,
-                    contact_email, whatsapp_number, linkedin, subject, pitch,
-                    status, scheduled_time, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    lead.get('company_name', 'Unknown'),
-                    lead.get('website', 'example.com'),
-                    lead.get('industry', 'Technology'),
-                    lead.get('location', 'India'),
-                    lead.get('app_status', 'Review Needed'),
-                    lead.get('contact_email', 'contact@example.com'),
-                    lead.get('whatsapp_number', '+91 9510539603'),
-                    lead.get('linkedin', ''),
-                    lead.get('subject', 'App Dev Pitch'),
-                    lead.get('pitch', ''),
-                    'Pending',
-                    None,
-                    datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                ))
-                
-    # Column mappings table for dynamic file imports
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS column_mappings (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        file_name TEXT,
-        file_column TEXT NOT NULL,
-        system_field TEXT NOT NULL,
-        created_at TEXT
-    )
-    ''')
-    
     conn.commit()
     conn.close()
 
 if __name__ == '__main__':
     init_db()
-    print("Database initialized successfully.")
+    print("Database initialized successfully with the upgraded multi-user campaign schema.")

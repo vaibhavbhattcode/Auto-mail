@@ -4,13 +4,16 @@ import datetime
 import time
 import threading
 import re
-from flask import Flask, request, jsonify, render_template, session, send_from_directory
+import random
+import urllib.parse
+from flask import Flask, request, jsonify, render_template, session, make_response, send_file, render_template_string
 from flask_cors import CORS
 import werkzeug.utils
 
 import database
 import file_parser
 import email_service
+import export_service
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = 'arena_agent_secure_secret_key_2026_dhruvbuilds'
@@ -30,93 +33,154 @@ email_send_tracker = {
     'last_batch_time': None
 }
 
-# --- Background Scheduler Loop with Anti-Spam ---
+# Helper to verify campaign completion status
+def check_and_update_campaign_completion(campaign_id):
+    conn = database.get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) as cnt FROM leads WHERE campaign_id = ? AND status IN ('Pending', 'Processing')", (campaign_id,))
+        remaining = cursor.fetchone()['cnt']
+        
+        if remaining == 0:
+            cursor.execute("SELECT status FROM campaigns WHERE id = ?", (campaign_id,))
+            camp = cursor.fetchone()
+            if camp and camp['status'] in ('running', 'scheduled'):
+                # Check if there were any failures or if all sent successfully
+                cursor.execute("SELECT COUNT(*) as failed_cnt FROM leads WHERE campaign_id = ? AND status = 'Failed'", (campaign_id,))
+                failed_leads = cursor.fetchone()['failed_cnt']
+                
+                cursor.execute("SELECT COUNT(*) FROM leads WHERE campaign_id = ?", (campaign_id,))
+                total_leads = cursor.fetchone()[0]
+                
+                new_status = 'completed'
+                if failed_leads > 0:
+                    new_status = 'failed' if failed_leads == total_leads else 'completed'
+                    
+                cursor.execute("UPDATE campaigns SET status = ?, updated_at = ? WHERE id = ?", 
+                               (new_status, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), campaign_id))
+                conn.commit()
+    finally:
+        conn.close()
+
+# --- Background Scheduler Loop ---
 def background_scheduler_loop():
     while True:
+        conn = None
         try:
             conn = database.get_db()
             cursor = conn.cursor()
             now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
-            # Find scheduled leads that are due to be sent
-            cursor.execute('''
-                SELECT id FROM leads 
-                WHERE status = 'Scheduled' 
-                  AND scheduled_time IS NOT NULL 
-                  AND scheduled_time <= ?
-                ORDER BY scheduled_time ASC
-                LIMIT 1
-            ''', (now,))
-            due_leads = cursor.fetchall()
+            # Find active campaigns
+            cursor.execute("SELECT id FROM campaigns WHERE status IN ('running', 'scheduled')")
+            active_campaign_ids = [row['id'] for row in cursor.fetchall()]
             
-            if due_leads:
-                # Load settings
-                cursor.execute('SELECT key, value FROM settings')
-                settings = {row['key']: row['value'] for row in cursor.fetchall()}
-                conn.close()
+            if active_campaign_ids:
+                # Find due leads in active campaigns
+                placeholders = ','.join('?' for _ in active_campaign_ids)
+                cursor.execute(f'''
+                    SELECT id, campaign_id FROM leads 
+                    WHERE status = 'Pending' 
+                      AND scheduled_time IS NOT NULL 
+                      AND scheduled_time <= ?
+                      AND campaign_id IN ({placeholders})
+                    ORDER BY scheduled_time ASC
+                    LIMIT 1
+                ''', [now] + active_campaign_ids)
                 
-                # Check rate limits
-                if not check_rate_limit(settings):
-                    print(f"[Scheduler] Rate limit reached, skipping this cycle...")
-                    time.sleep(20)
-                    continue
+                due_lead = cursor.fetchone()
                 
-                for l in due_leads:
-                    print(f"[Scheduler] Dispatching scheduled email for Lead #{l['id']} at {now}...")
-                    email_service.dispatch_lead_email(l['id'], settings)
+                if due_lead:
+                    lead_id = due_lead['id']
+                    campaign_id = due_lead['campaign_id']
                     
-                    # Dynamic cooldown
+                    # Load global settings
+                    cursor.execute('SELECT key, value FROM settings')
+                    settings = {row['key']: row['value'] for row in cursor.fetchall()}
+                    
+                    # Close scheduler db connection before launching the send task to keep it free
+                    conn.close()
+                    conn = None
+                    
+                    # Check global rate limits
+                    if not check_rate_limit(settings):
+                        print(f"[Scheduler] Rate limit reached, skipping this cycle...")
+                        time.sleep(15)
+                        continue
+                    
+                    print(f"[Scheduler] Dispatching scheduled lead #{lead_id} at {now}")
+                    
+                    # Update status to processing
+                    conn_update = database.get_db()
+                    try:
+                        cursor_up = conn_update.cursor()
+                        cursor_up.execute("UPDATE leads SET status = 'Processing' WHERE id = ?", (lead_id,))
+                        conn_update.commit()
+                    finally:
+                        conn_update.close()
+                    
+                    success, msg = email_service.dispatch_lead_email(lead_id, settings)
+                    
+                    if success:
+                        update_send_tracker()
+                        
+                    # Cooldown interval
                     cooldown = calculate_dynamic_cooldown(settings)
-                    print(f"[Scheduler] Waiting {cooldown}s cooldown before next email...")
+                    print(f"[Scheduler] Waiting {cooldown}s cooldown...")
                     time.sleep(cooldown)
+                    
+                    # Check campaign completion
+                    check_and_update_campaign_completion(campaign_id)
+                else:
+                    conn.close()
+                    conn = None
             else:
                 conn.close()
+                conn = None
         except Exception as e:
             print(f"[Scheduler Error]: {str(e)}")
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except:
+                    pass
             
-        time.sleep(20)
+        time.sleep(10)
 
 # Start background thread
 threading.Thread(target=background_scheduler_loop, daemon=True).start()
 
-
 # --- Rate Limiting & Anti-Spam Functions ---
 def check_rate_limit(settings):
-    """Check if we can send email based on rate limits"""
     global email_send_tracker
-    
     now = datetime.datetime.now()
     today = now.date()
     
-    # Reset daily counter
     if email_send_tracker['last_reset_date'] != today:
         email_send_tracker['emails_sent_today'] = 0
         email_send_tracker['last_reset_date'] = today
         email_send_tracker['batch_count'] = 0
-    
-    # Check daily limit
-    daily_limit = int(settings.get('daily_email_limit', 100))
+        
+    daily_limit = int(settings.get('daily_email_limit', 500))
     if email_send_tracker['emails_sent_today'] >= daily_limit:
         return False
-    
-    # Check batch limits
+        
     emails_per_batch = int(settings.get('emails_per_batch', 5))
     if email_send_tracker['batch_count'] >= emails_per_batch:
-        batch_cooldown_minutes = int(settings.get('batch_cooldown_minutes', 10))
+        batch_cooldown = int(settings.get('batch_cooldown_minutes', 5))
         if email_send_tracker['last_batch_time']:
-            time_since_batch = (now - email_send_tracker['last_batch_time']).total_seconds() / 60
-            if time_since_batch < batch_cooldown_minutes:
+            elapsed = (now - email_send_tracker['last_batch_time']).total_seconds() / 60
+            if elapsed < batch_cooldown:
                 return False
-        # Reset batch
         email_send_tracker['batch_count'] = 0
         email_send_tracker['last_batch_time'] = now
-    
+        
     return True
 
 def calculate_dynamic_cooldown(settings):
-    """Calculate randomized cooldown to appear human"""
-    min_cooldown = int(settings.get('min_cooldown_seconds', 60))
-    max_cooldown = int(settings.get('max_cooldown_seconds', 180))
+    min_cooldown = int(settings.get('min_cooldown_seconds', 10))
+    max_cooldown = int(settings.get('max_cooldown_seconds', 30))
     randomize = settings.get('randomize_cooldown', 'true') == 'true'
     
     if randomize:
@@ -125,23 +189,59 @@ def calculate_dynamic_cooldown(settings):
         return min_cooldown
 
 def update_send_tracker():
-    """Update global send tracker after successful send"""
     global email_send_tracker
     email_send_tracker['last_send_time'] = datetime.datetime.now()
     email_send_tracker['emails_sent_today'] += 1
     email_send_tracker['batch_count'] += 1
 
-
-# --- Authentication Helpers ---
-def is_authenticated():
-    # Allow local simulation / or require auth
-    return session.get('logged_in', False)
+# --- Authentication Middleware Helper ---
+def get_logged_in_user():
+    if not session.get('logged_in'):
+        return None
+    return session.get('user_id')
 
 # --- API Endpoints ---
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    # Auto-update tracking domain based on current access URL
+    conn = None
+    try:
+        current_origin = request.url_root.rstrip('/')
+        is_current_public = 'localhost' not in current_origin and '127.0.0.1' not in current_origin
+        
+        conn = database.get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM settings WHERE key = 'tracking_domain'")
+        row = cursor.fetchone()
+        saved_domain = row['value'] if row else None
+        
+        is_saved_public = saved_domain and 'localhost' not in saved_domain and '127.0.0.1' not in saved_domain
+        
+        # Update conditions:
+        # 1. Current origin is public (always update to public domain for live tracking)
+        # 2. Or, the saved domain is not public and current origin is different
+        should_update = False
+        if is_current_public and saved_domain != current_origin:
+            should_update = True
+        elif not is_saved_public and saved_domain != current_origin:
+            should_update = True
+            
+        if should_update and current_origin:
+            cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('tracking_domain', ?)", (current_origin,))
+            conn.commit()
+            print(f"[Auto-Settings] Automatically updated tracking_domain to {current_origin}")
+    except Exception as e:
+        print(f"[Auto-Settings Error] Failed to update tracking domain: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+    response = make_response(render_template('index.html'))
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 @app.route('/api/auth/status', methods=['GET'])
 def auth_status():
@@ -150,69 +250,81 @@ def auth_status():
     
     conn = database.get_db()
     cursor = conn.cursor()
-    
-    # Check if any users exist
     cursor.execute("SELECT COUNT(*) as count FROM users")
     users_exist = cursor.fetchone()['count'] > 0
     
     user_info = None
     if logged_in and user_id:
-        cursor.execute("SELECT id, username, email, full_name, role FROM users WHERE id = ?", (user_id,))
-        user_row = cursor.fetchone()
-        if user_row:
-            user_info = dict(user_row)
-    
+        cursor.execute("SELECT id, email, full_name FROM users WHERE id = ?", (user_id,))
+        row = cursor.fetchone()
+        if row:
+            user_info = dict(row)
+            
     conn.close()
-    
     return jsonify({
         'logged_in': logged_in,
         'first_time_setup': not users_exist,
         'user': user_info
     })
 
-@app.route('/api/auth/login', methods=['POST'])
-def login():
+@app.route('/api/auth/register', methods=['POST'])
+def register():
     data = request.get_json() or {}
-    username = data.get('username', '').strip()
+    email = data.get('email', '').strip().lower()
     password = data.get('password', '').strip()
+    full_name = data.get('full_name', '').strip() or email.split('@')[0]
     
-    if not username or not password:
-        return jsonify({'success': False, 'message': 'Username and password required'}), 400
-    
+    if not email or not password:
+        return jsonify({'success': False, 'message': 'Email and password required.'}), 400
+        
     conn = database.get_db()
     cursor = conn.cursor()
     
-    # Check if this is first time setup
-    cursor.execute("SELECT COUNT(*) as count FROM users")
-    if cursor.fetchone()['count'] == 0:
-        # First time setup - create admin user
-        password_hash = database.hash_password(password)
-        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # Check duplicate
+    cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({'success': False, 'message': 'Email already registered.'}), 400
+        
+    pass_hash = database.hash_password(password)
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    try:
         cursor.execute('''
-            INSERT INTO users (username, password_hash, email, full_name, role, created_at, last_login)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (username, password_hash, data.get('email', ''), data.get('full_name', username), 'admin', now, now))
+            INSERT INTO users (username, email, password_hash, full_name, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (email, email, pass_hash, full_name, now))
         conn.commit()
         user_id = cursor.lastrowid
+        conn.close()
+        
         session['logged_in'] = True
         session['user_id'] = user_id
-        session['username'] = username
+        session['email'] = email
+        
+        return jsonify({'success': True, 'message': 'Account registered successfully.'})
+    except Exception as e:
         conn.close()
-        return jsonify({'success': True, 'message': 'Account created successfully!', 'first_time': True})
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    data = request.get_json() or {}
+    email = data.get('email', '').strip().lower()
+    password = data.get('password', '').strip()
     
-    # Regular login
-    cursor.execute("SELECT id, username, password_hash, email, full_name, role FROM users WHERE username = ? AND is_active = 1", (username,))
+    if not email or not password:
+        return jsonify({'success': False, 'message': 'Email and password required.'}), 400
+        
+    conn = database.get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
     user = cursor.fetchone()
     
-    if not user:
+    if not user or not database.verify_password(password, user['password_hash']):
         conn.close()
-        return jsonify({'success': False, 'message': 'Invalid credentials'}), 401
-    
-    if not database.verify_password(password, user['password_hash']):
-        conn.close()
-        return jsonify({'success': False, 'message': 'Invalid credentials'}), 401
-    
-    # Update last login
+        return jsonify({'success': False, 'message': 'Invalid credentials.'}), 401
+        
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute("UPDATE users SET last_login = ? WHERE id = ?", (now, user['id']))
     conn.commit()
@@ -220,57 +332,26 @@ def login():
     
     session['logged_in'] = True
     session['user_id'] = user['id']
-    session['username'] = user['username']
-    session['role'] = user['role']
+    session['email'] = user['email']
     
-    return jsonify({'success': True, 'message': 'Login successful', 'user': {
-        'id': user['id'],
-        'username': user['username'],
-        'email': user['email'],
-        'full_name': user['full_name'],
-        'role': user['role']
-    }})
-
-@app.route('/api/auth/change-password', methods=['POST'])
-def change_password():
-    if not session.get('logged_in'):
-        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
-    
-    data = request.get_json() or {}
-    current_password = data.get('current_password', '').strip()
-    new_password = data.get('new_password', '').strip()
-    
-    if not current_password or not new_password:
-        return jsonify({'success': False, 'message': 'Both passwords required'}), 400
-    
-    if len(new_password) < 6:
-        return jsonify({'success': False, 'message': 'Password must be at least 6 characters'}), 400
-    
-    user_id = session.get('user_id')
-    conn = database.get_db()
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-    
-    if not user or not database.verify_password(current_password, user['password_hash']):
-        conn.close()
-        return jsonify({'success': False, 'message': 'Current password incorrect'}), 401
-    
-    new_hash = database.hash_password(new_password)
-    cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user_id))
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'success': True, 'message': 'Password changed successfully'})
+    return jsonify({
+        'success': True, 
+        'message': 'Logged in successfully.',
+        'user': {'id': user['id'], 'email': user['email'], 'full_name': user['full_name']}
+    })
 
 @app.route('/api/auth/logout', methods=['POST'])
 def logout():
     session.clear()
     return jsonify({'success': True, 'message': 'Logged out.'})
 
+# --- Settings ---
 @app.route('/api/settings', methods=['GET', 'POST'])
 def manage_settings():
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
     conn = database.get_db()
     cursor = conn.cursor()
     
@@ -278,199 +359,575 @@ def manage_settings():
         cursor.execute('SELECT key, value FROM settings')
         settings = {r['key']: r['value'] for r in cursor.fetchall()}
         conn.close()
-        # Mask google password if present
-        if settings.get('google_app_password'):
-            settings['google_app_password_masked'] = '••••••••••••••••'
-        else:
-            settings['google_app_password_masked'] = ''
         return jsonify(settings)
         
     elif request.method == 'POST':
         data = request.get_json() or {}
         for k, v in data.items():
-            if k == 'google_app_password_masked': continue
             cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (k, str(v)))
         conn.commit()
         conn.close()
         return jsonify({'success': True, 'message': 'Settings saved successfully.'})
 
-@app.route('/api/mail-providers', methods=['GET'])
-def get_mail_providers():
-    providers = {
-        'gmail': {'name': 'Gmail', 'host': 'smtp.gmail.com', 'port': '587', 'help': 'Use a 16-character Google App Password'},
-        'titan': {'name': 'Titan Mail', 'host': 'smtp.titan.email', 'port': '587', 'help': 'Enter your Titan Mail email and password'},
-        'custom': {'name': 'Custom SMTP', 'host': '', 'port': '587', 'help': 'Enter your custom SMTP server details'}
-    }
-    return jsonify(providers)
-
-@app.route('/api/settings/test-email', methods=['POST'])
-def test_smtp_email():
+# --- SMTP Accounts CRUD ---
+@app.route('/api/smtp-accounts', methods=['GET', 'POST'])
+def manage_smtp_accounts():
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
     conn = database.get_db()
     cursor = conn.cursor()
-    cursor.execute('SELECT key, value FROM settings')
-    settings = {r['key']: r['value'] for r in cursor.fetchall()}
+    
+    if request.method == 'GET':
+        cursor.execute('SELECT id, email_address, sender_name, smtp_host, smtp_port, ssl_tls FROM smtp_accounts WHERE user_id = ?', (user_id,))
+        accounts = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return jsonify(accounts)
+        
+    elif request.method == 'POST':
+        data = request.get_json() or {}
+        email_address = data.get('email_address', '').strip()
+        smtp_host = data.get('smtp_host', '').strip()
+        smtp_port = int(data.get('smtp_port', 587))
+        ssl_tls = data.get('ssl_tls', 'tls').strip()
+        password = data.get('password', '').strip()
+        sender_name = data.get('sender_name', '').strip()
+        
+        if not email_address or not smtp_host or not password:
+            conn.close()
+            return jsonify({'success': False, 'message': 'Email, SMTP Host, and Password are required.'}), 400
+            
+        pass_encrypted = database.encrypt_password(password)
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        cursor.execute('''
+            INSERT INTO smtp_accounts (user_id, email_address, sender_name, smtp_host, smtp_port, ssl_tls, password_encrypted, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (user_id, email_address, sender_name, smtp_host, smtp_port, ssl_tls, pass_encrypted, now))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'message': 'SMTP Account added successfully.'})
+
+@app.route('/api/smtp-accounts/<int:account_id>', methods=['PUT', 'DELETE'])
+def update_delete_smtp_account(account_id):
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
+    conn = database.get_db()
+    cursor = conn.cursor()
+    
+    # Ownership check
+    cursor.execute("SELECT id FROM smtp_accounts WHERE id = ? AND user_id = ?", (account_id, user_id))
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({'success': False, 'message': 'Account not found.'}), 404
+        
+    if request.method == 'PUT':
+        data = request.get_json() or {}
+        email_address = data.get('email_address', '').strip()
+        smtp_host = data.get('smtp_host', '').strip()
+        smtp_port = int(data.get('smtp_port', 587))
+        ssl_tls = data.get('ssl_tls', 'tls').strip()
+        sender_name = data.get('sender_name', '').strip()
+        
+        cursor.execute('''
+            UPDATE smtp_accounts 
+            SET email_address = ?, sender_name = ?, smtp_host = ?, smtp_port = ?, ssl_tls = ?
+            WHERE id = ?
+        ''', (email_address, sender_name, smtp_host, smtp_port, ssl_tls, account_id))
+        
+        # If updating password
+        password = data.get('password', '').strip()
+        if password and password != '••••••••••••••••':
+            pass_encrypted = database.encrypt_password(password)
+            cursor.execute("UPDATE smtp_accounts SET password_encrypted = ? WHERE id = ?", (pass_encrypted, account_id))
+            
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'message': 'SMTP Account updated successfully.'})
+        
+    elif request.method == 'DELETE':
+        cursor.execute("DELETE FROM smtp_accounts WHERE id = ?", (account_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'message': 'SMTP Account deleted successfully.'})
+
+@app.route('/api/smtp-accounts/<int:account_id>/test', methods=['POST'])
+def test_smtp_account(account_id):
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
+    conn = database.get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM smtp_accounts WHERE id = ? AND user_id = ?", (account_id, user_id))
+    account = cursor.fetchone()
     conn.close()
+    
+    if not account:
+        return jsonify({'success': False, 'message': 'SMTP account not found.'}), 404
+        
+    account = dict(account)
+    account['password'] = database.decrypt_password(account['password_encrypted'])
     
     try:
-        success, msg = email_service.send_test_email(settings)
+        success, msg = email_service.send_test_email(account)
         return jsonify({'success': success, 'message': msg})
     except Exception as e:
-        # Return 200 with success=false so frontend can show a clean toast
-        # without browser noise for expected SMTP/auth failures.
-        return jsonify({'success': False, 'message': str(e), 'error_type': 'smtp_test_failed'})
+        return jsonify({'success': False, 'message': str(e)})
 
-@app.route('/api/dashboard/stats', methods=['GET'])
-def get_dashboard_stats():
+# --- Campaigns CRUD ---
+@app.route('/api/campaigns', methods=['GET', 'POST'])
+def manage_campaigns():
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
     conn = database.get_db()
     cursor = conn.cursor()
     
-    cursor.execute('SELECT COUNT(*) FROM leads')
-    total = cursor.fetchone()[0]
-    
-    cursor.execute('SELECT COUNT(*) FROM leads WHERE status = "Sent"')
-    sent = cursor.fetchone()[0]
-    
-    cursor.execute('SELECT COUNT(*) FROM leads WHERE status = "Scheduled"')
-    scheduled = cursor.fetchone()[0]
-    
-    cursor.execute('SELECT COUNT(*) FROM leads WHERE status = "Failed"')
-    failed = cursor.fetchone()[0]
-    
-    cursor.execute('SELECT COUNT(*) FROM leads WHERE status = "Pending"')
-    pending = cursor.fetchone()[0]
-    
-    # Industry distribution
-    cursor.execute('SELECT industry, COUNT(*) as cnt FROM leads GROUP BY industry')
-    industries = [{'name': r['industry'], 'count': r['cnt']} for r in cursor.fetchall()]
-    
-    # Recent activity logs
-    cursor.execute('SELECT * FROM logs ORDER BY timestamp DESC LIMIT 8')
-    logs = [dict(r) for r in cursor.fetchall()]
-    
-    conn.close()
-    
-    # Simulated response rate for nice dashboard display
-    reply_rate = round((sent * 0.28), 1) if sent > 0 else 0
-    open_rate = round((sent * 0.72), 1) if sent > 0 else 0
-    
-    return jsonify({
-        'total_leads': total,
-        'sent_emails': sent,
-        'scheduled_emails': scheduled,
-        'failed_emails': failed,
-        'pending_leads': pending,
-        'open_rate': open_rate,
-        'reply_rate': reply_rate,
-        'industry_distribution': industries,
-        'recent_logs': logs
-    })
+    if request.method == 'GET':
+        search = request.args.get('search', '').strip()
+        status = request.args.get('status', 'All').strip()
+        
+        query = "SELECT c.*, s.email_address as smtp_email FROM campaigns c LEFT JOIN smtp_accounts s ON c.smtp_account_id = s.id WHERE c.created_by = ?"
+        params = [user_id]
+        
+        if search:
+            query += " AND (c.name LIKE ? OR c.description LIKE ?)"
+            wild = f"%{search}%"
+            params.extend([wild, wild])
+            
+        if status != 'All':
+            query += " AND c.status = ?"
+            params.append(status.lower())
+            
+        query += " ORDER BY c.id DESC"
+        
+        cursor.execute(query, params)
+        campaigns = []
+        for row in cursor.fetchall():
+            c = dict(row)
+            # Count leads status
+            cursor.execute("SELECT status, COUNT(*) as cnt FROM leads WHERE campaign_id = ? GROUP BY status", (c['id'],))
+            counts = {r['status']: r['cnt'] for r in cursor.fetchall()}
+            
+            c['total_leads'] = sum(counts.values())
+            c['sent_count'] = counts.get('Sent', 0)
+            c['failed_count'] = counts.get('Failed', 0)
+            c['pending_count'] = counts.get('Pending', 0) + counts.get('Processing', 0)
+            c['scheduled_count'] = counts.get('Scheduled', 0)
+            
+            # Engagement rates
+            cursor.execute("SELECT COUNT(*) FROM leads WHERE campaign_id = ? AND open_count > 0", (c['id'],))
+            c['opened_count'] = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM leads WHERE campaign_id = ? AND click_count > 0", (c['id'],))
+            c['clicked_count'] = cursor.fetchone()[0]
+            
+            campaigns.append(c)
+            
+        conn.close()
+        return jsonify(campaigns)
+        
+    elif request.method == 'POST':
+        data = request.get_json() or {}
+        name = data.get('name', '').strip()
+        description = data.get('description', '').strip()
+        smtp_account_id = data.get('smtp_account_id')
+        
+        if not name:
+            conn.close()
+            return jsonify({'success': False, 'message': 'Campaign name is required.'}), 400
+            
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute('''
+            INSERT INTO campaigns (name, description, status, smtp_account_id, created_by, created_at, updated_at)
+            VALUES (?, ?, 'draft', ?, ?, ?, ?)
+        ''', (name, description, smtp_account_id, user_id, now, now))
+        conn.commit()
+        campaign_id = cursor.lastrowid
+        conn.close()
+        
+        return jsonify({'success': True, 'message': 'Campaign created successfully.', 'campaign_id': campaign_id})
 
-@app.route('/api/leads', methods=['GET'])
-def get_leads():
+@app.route('/api/campaigns/<int:campaign_id>', methods=['PUT', 'DELETE'])
+def update_delete_campaign(campaign_id):
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
     conn = database.get_db()
     cursor = conn.cursor()
     
-    search = request.args.get('search', '').strip()
-    status = request.args.get('status', '').strip()
-    industry = request.args.get('industry', '').strip()
-    
-    query = 'SELECT * FROM leads WHERE 1=1'
-    params = []
-    
-    if search:
-        query += ' AND (company_name LIKE ? OR contact_email LIKE ? OR website LIKE ? OR subject LIKE ?)'
-        wildcard = f'%{search}%'
-        params.extend([wildcard, wildcard, wildcard, wildcard])
+    # Ownership
+    cursor.execute("SELECT id FROM campaigns WHERE id = ? AND created_by = ?", (campaign_id, user_id))
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({'success': False, 'message': 'Campaign not found.'}), 404
         
-    if status and status != 'All':
-        query += ' AND status = ?'
-        params.append(status)
+    if request.method == 'PUT':
+        data = request.get_json() or {}
+        name = data.get('name', '').strip()
+        description = data.get('description', '').strip()
+        smtp_account_id = data.get('smtp_account_id')
         
-    if industry and industry != 'All':
-        query += ' AND industry = ?'
-        params.append(industry)
+        if not name:
+            conn.close()
+            return jsonify({'success': False, 'message': 'Campaign name is required.'}), 400
+            
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute('''
+            UPDATE campaigns 
+            SET name = ?, description = ?, smtp_account_id = ?, updated_at = ?
+            WHERE id = ?
+        ''', (name, description, smtp_account_id, now, campaign_id))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'message': 'Campaign updated successfully.'})
         
-    query += ' ORDER BY id DESC'
-    
-    cursor.execute(query, params)
-    leads = [dict(r) for r in cursor.fetchall()]
-    conn.close()
-    return jsonify(leads)
+    elif request.method == 'DELETE':
+        # Delete campaign and leads
+        cursor.execute("DELETE FROM campaigns WHERE id = ?", (campaign_id,))
+        cursor.execute("DELETE FROM leads WHERE campaign_id = ?", (campaign_id,))
+        cursor.execute("DELETE FROM tracking_logs WHERE campaign_id = ?", (campaign_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'message': 'Campaign and associated leads deleted successfully.'})
 
-@app.route('/api/leads', methods=['POST'])
-def add_lead():
-    data = request.get_json() or {}
+@app.route('/api/campaigns/<int:campaign_id>/duplicate', methods=['POST'])
+def duplicate_campaign(campaign_id):
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
     conn = database.get_db()
     cursor = conn.cursor()
     
+    cursor.execute("SELECT * FROM campaigns WHERE id = ? AND created_by = ?", (campaign_id, user_id))
+    campaign = cursor.fetchone()
+    if not campaign:
+        conn.close()
+        return jsonify({'success': False, 'message': 'Campaign not found.'}), 404
+        
+    campaign = dict(campaign)
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    new_name = f"Copy of {campaign['name']}"
     
     cursor.execute('''
-        INSERT INTO leads (
-            company_name, website, industry, location, app_status,
-            contact_email, whatsapp_number, linkedin, subject, pitch,
-            status, scheduled_time, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (
-        data.get('company_name', 'New Company').strip(),
-        data.get('website', 'example.com').strip(),
-        data.get('industry', 'Technology').strip(),
-        data.get('location', 'India').strip(),
-        data.get('app_status', 'Review Needed').strip(),
-        data.get('contact_email', 'contact@example.com').strip(),
-        data.get('whatsapp_number', '+91 9510539603').strip(),
-        data.get('linkedin', '').strip(),
-        data.get('subject', 'App Dev Pitch').strip(),
-        data.get('pitch', '').strip(),
-        'Pending',
-        None,
-        now
-    ))
+        INSERT INTO campaigns (name, description, status, smtp_account_id, created_by, created_at, updated_at)
+        VALUES (?, ?, 'draft', ?, ?, ?, ?)
+    ''', (new_name, campaign['description'], campaign['smtp_account_id'], user_id, now, now))
+    new_campaign_id = cursor.lastrowid
+    
+    # Duplicate leads inside campaign (resetting statuses)
+    cursor.execute("SELECT * FROM leads WHERE campaign_id = ?", (campaign_id,))
+    leads = cursor.fetchall()
+    
+    for lead in leads:
+        lead = dict(lead)
+        cursor.execute('''
+            INSERT INTO leads (
+                campaign_id, recipient_email, cc, bcc, subject, body, attachments, variables, 
+                status, scheduled_time, retry_count, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending', NULL, 0, ?, ?)
+        ''', (
+            new_campaign_id, lead['recipient_email'], lead['cc'], lead['bcc'], lead['subject'], 
+            lead['body'], lead['attachments'], lead['variables'], now, now
+        ))
+        
     conn.commit()
     conn.close()
-    return jsonify({'success': True, 'message': 'Lead added successfully.'})
+    return jsonify({'success': True, 'message': f'Campaign duplicated as "{new_name}".', 'campaign_id': new_campaign_id})
 
-@app.route('/api/leads/<int:lead_id>', methods=['PUT'])
-def update_lead(lead_id):
+@app.route('/api/campaigns/<int:campaign_id>/pause', methods=['POST'])
+def pause_campaign(campaign_id):
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
+    conn = database.get_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE campaigns SET status = 'paused' WHERE id = ? AND created_by = ?", (campaign_id, user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'message': 'Campaign paused.'})
+
+@app.route('/api/campaigns/<int:campaign_id>/resume', methods=['POST'])
+def resume_campaign(campaign_id):
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
+    conn = database.get_db()
+    cursor = conn.cursor()
+    
+    # Check if there are scheduled times
+    cursor.execute("SELECT COUNT(*) FROM leads WHERE campaign_id = ? AND scheduled_time IS NOT NULL", (campaign_id,))
+    has_scheduled = cursor.fetchone()[0] > 0
+    
+    status = 'scheduled' if has_scheduled else 'running'
+    
+    cursor.execute("UPDATE campaigns SET status = ? WHERE id = ? AND created_by = ?", (status, campaign_id, user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'message': f'Campaign activated ({status.capitalize()}).'})
+
+@app.route('/api/campaigns/<int:campaign_id>/cancel', methods=['POST'])
+def cancel_campaign(campaign_id):
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
+    conn = database.get_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE campaigns SET status = 'cancelled' WHERE id = ? AND created_by = ?", (campaign_id, user_id))
+    cursor.execute("UPDATE leads SET scheduled_time = NULL WHERE campaign_id = ? AND status = 'Pending'", (campaign_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'message': 'Campaign cancelled and scheduled times cleared.'})
+
+@app.route('/api/campaigns/<int:campaign_id>/archive', methods=['POST'])
+def archive_campaign(campaign_id):
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
+    conn = database.get_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE campaigns SET status = 'archived' WHERE id = ? AND created_by = ?", (campaign_id, user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'message': 'Campaign archived.'})
+
+@app.route('/api/campaigns/<int:campaign_id>/bulk-schedule', methods=['POST'])
+def bulk_schedule(campaign_id):
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
     data = request.get_json() or {}
+    start_time_str = data.get('start_time', '').strip() # e.g. "2026-06-14 10:00:00"
+    interval = int(data.get('interval', 0)) # in minutes
+    
+    if not start_time_str:
+        return jsonify({'success': False, 'message': 'Start time is required.'}), 400
+        
+    try:
+        start_time = datetime.datetime.strptime(start_time_str.replace('T', ' '), "%Y-%m-%d %H:%M")
+    except ValueError:
+        try:
+            start_time = datetime.datetime.strptime(start_time_str.replace('T', ' '), "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return jsonify({'success': False, 'message': 'Invalid date format. Use YYYY-MM-DD HH:MM.'}), 400
+            
     conn = database.get_db()
     cursor = conn.cursor()
     
-    cursor.execute('''
-        UPDATE leads SET
-            company_name = ?, website = ?, industry = ?, location = ?,
-            app_status = ?, contact_email = ?, whatsapp_number = ?,
-            linkedin = ?, subject = ?, pitch = ?
-        WHERE id = ?
-    ''', (
-        data.get('company_name', '').strip(),
-        data.get('website', '').strip(),
-        data.get('industry', '').strip(),
-        data.get('location', '').strip(),
-        data.get('app_status', '').strip(),
-        data.get('contact_email', '').strip(),
-        data.get('whatsapp_number', '').strip(),
-        data.get('linkedin', '').strip(),
-        data.get('subject', '').strip(),
-        data.get('pitch', '').strip(),
-        lead_id
-    ))
+    # Ownership
+    cursor.execute("SELECT id FROM campaigns WHERE id = ? AND created_by = ?", (campaign_id, user_id))
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({'success': False, 'message': 'Campaign not found.'}), 404
+        
+    # Get all Pending leads in this campaign
+    cursor.execute("SELECT id FROM leads WHERE campaign_id = ? AND status = 'Pending' ORDER BY id ASC", (campaign_id,))
+    leads = cursor.fetchall()
+    
+    current_time = start_time
+    for lead in leads:
+        lead_id = lead['id']
+        sched_time_str = current_time.strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute("UPDATE leads SET scheduled_time = ? WHERE id = ?", (sched_time_str, lead_id))
+        current_time += datetime.timedelta(minutes=interval)
+        
+    cursor.execute("UPDATE campaigns SET status = 'scheduled', start_time = ?, sending_interval = ? WHERE id = ?", 
+                   (start_time_str, interval, campaign_id))
     conn.commit()
     conn.close()
-    return jsonify({'success': True, 'message': 'Lead updated successfully.'})
+    
+    return jsonify({'success': True, 'message': f'Successfully scheduled {len(leads)} emails with a {interval}-minute interval.'})
 
-@app.route('/api/leads/<int:lead_id>', methods=['DELETE'])
-def delete_lead(lead_id):
+# --- Leads CRUD under Campaign ---
+@app.route('/api/campaigns/<int:campaign_id>/leads', methods=['GET', 'POST'])
+def manage_campaign_leads(campaign_id):
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
     conn = database.get_db()
     cursor = conn.cursor()
-    cursor.execute('DELETE FROM leads WHERE id = ?', (lead_id,))
-    cursor.execute('DELETE FROM logs WHERE lead_id = ?', (lead_id,))
+    
+    # Ownership check
+    cursor.execute("SELECT id FROM campaigns WHERE id = ? AND created_by = ?", (campaign_id, user_id))
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({'success': False, 'message': 'Campaign not found.'}), 404
+        
+    if request.method == 'GET':
+        search = request.args.get('search', '').strip()
+        status = request.args.get('status', 'All').strip()
+        
+        query = "SELECT * FROM leads WHERE campaign_id = ?"
+        params = [campaign_id]
+        
+        if search:
+            query += " AND (recipient_email LIKE ? OR subject LIKE ? OR body LIKE ? OR variables LIKE ?)"
+            wild = f"%{search}%"
+            params.extend([wild, wild, wild, wild])
+            
+        if status != 'All':
+            query += " AND status = ?"
+            params.append(status)
+            
+        query += " ORDER BY id DESC"
+        
+        cursor.execute(query, params)
+        leads = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return jsonify(leads)
+        
+    elif request.method == 'POST':
+        import re
+        data = request.get_json() or {}
+        recipient_email = data.get('recipient_email', '').strip()
+        emails_str = data.get('emails', '').strip()
+        cc = data.get('cc', '').strip()
+        bcc = data.get('bcc', '').strip()
+        subject = data.get('subject', '').strip()
+        body = data.get('body', '').strip()
+        attachments = data.get('attachments', '[]')
+        variables = data.get('variables', '{}')
+        
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        if emails_str:
+            # Bulk manual addition
+            emails = [e.strip() for e in re.split(r'[,\n;]+', emails_str) if e.strip()]
+            valid_emails = [e for e in emails if '@' in e]
+            if not valid_emails:
+                conn.close()
+                return jsonify({'success': False, 'message': 'No valid emails found in the list.'}), 400
+                
+            inserted = 0
+            for email in valid_emails:
+                cursor.execute('''
+                    INSERT INTO leads (campaign_id, recipient_email, cc, bcc, subject, body, attachments, variables, status, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?)
+                ''', (campaign_id, email, cc, bcc, subject, body, attachments, variables, now, now))
+                inserted += 1
+            conn.commit()
+            conn.close()
+            return jsonify({'success': True, 'message': f'Successfully added {inserted} leads manually.'})
+        else:
+            # Single manual addition
+            if not recipient_email:
+                conn.close()
+                return jsonify({'success': False, 'message': 'Recipient email is required.'}), 400
+                
+            cursor.execute('''
+                INSERT INTO leads (campaign_id, recipient_email, cc, bcc, subject, body, attachments, variables, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?)
+            ''', (campaign_id, recipient_email, cc, bcc, subject, body, attachments, variables, now, now))
+            conn.commit()
+            conn.close()
+            return jsonify({'success': True, 'message': 'Lead added successfully.'})
+
+@app.route('/api/campaigns/<int:campaign_id>/leads/<int:lead_id>', methods=['PUT', 'DELETE'])
+def update_delete_lead(campaign_id, lead_id):
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
+    conn = database.get_db()
+    cursor = conn.cursor()
+    
+    # Ownership
+    cursor.execute("SELECT id FROM campaigns WHERE id = ? AND created_by = ?", (campaign_id, user_id))
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({'success': False, 'message': 'Campaign not found.'}), 404
+        
+    if request.method == 'PUT':
+        data = request.get_json() or {}
+        recipient_email = data.get('recipient_email', '').strip()
+        cc = data.get('cc', '').strip()
+        bcc = data.get('bcc', '').strip()
+        subject = data.get('subject', '').strip()
+        body = data.get('body', '').strip()
+        variables = data.get('variables', '{}')
+        status = data.get('status', 'Pending')
+        scheduled_time = data.get('scheduled_time')
+        
+        cursor.execute('''
+            UPDATE leads 
+            SET recipient_email = ?, cc = ?, bcc = ?, subject = ?, body = ?, variables = ?, status = ?, scheduled_time = ?, updated_at = ?
+            WHERE id = ? AND campaign_id = ?
+        ''', (recipient_email, cc, bcc, subject, body, variables, status, scheduled_time, 
+              datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), lead_id, campaign_id))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'message': 'Lead details updated.'})
+        
+    elif request.method == 'DELETE':
+        cursor.execute("DELETE FROM leads WHERE id = ? AND campaign_id = ?", (lead_id, campaign_id))
+        cursor.execute("DELETE FROM tracking_logs WHERE lead_id = ?", (lead_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'message': 'Lead deleted.'})
+
+@app.route('/api/campaigns/<int:campaign_id>/leads/<int:lead_id>/send', methods=['POST'])
+def send_lead_instant(campaign_id, lead_id):
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
+    conn = database.get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT key, value FROM settings")
+    settings = {row['key']: row['value'] for row in cursor.fetchall()}
+    conn.close()
+    
+    # Send
+    success, msg = email_service.dispatch_lead_email(lead_id, settings)
+    check_and_update_campaign_completion(campaign_id)
+    
+    if success:
+        update_send_tracker()
+        return jsonify({'success': True, 'message': 'Email dispatched successfully.'})
+    else:
+        return jsonify({'success': False, 'message': f'Sending failed: {msg}'})
+
+@app.route('/api/campaigns/<int:campaign_id>/leads/<int:lead_id>/schedule', methods=['POST'])
+def schedule_lead_instant(campaign_id, lead_id):
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
+    data = request.get_json() or {}
+    sched_time = data.get('scheduled_time', '').strip() # YYYY-MM-DD HH:MM
+    
+    if not sched_time:
+        return jsonify({'success': False, 'message': 'Schedule time is required.'}), 400
+        
+    conn = database.get_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE leads SET status = 'Pending', scheduled_time = ? WHERE id = ? AND campaign_id = ?", 
+                   (sched_time, lead_id, campaign_id))
+    cursor.execute("UPDATE campaigns SET status = 'scheduled' WHERE id = ? AND status = 'draft'", (campaign_id,))
     conn.commit()
     conn.close()
-    return jsonify({'success': True, 'message': 'Lead deleted.'})
+    
+    return jsonify({'success': True, 'message': f'Email scheduled for {sched_time}.'})
 
-@app.route('/api/leads/upload', methods=['POST'])
-def upload_leads_file():
+# --- Excel/CSV Upload Wizard ---
+@app.route('/api/campaigns/<int:campaign_id>/upload', methods=['POST'])
+def upload_campaign_leads(campaign_id):
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
     if 'file' not in request.files:
         return jsonify({'success': False, 'message': 'No file part attached.'}), 400
         
@@ -484,11 +941,17 @@ def upload_leads_file():
     file.save(filepath)
     
     try:
-        # Check if preview mode
         preview_mode = request.form.get('preview', 'false') == 'true'
         
         if preview_mode:
             headers, sample_rows = file_parser.extract_raw_data(filepath)
+            if not headers:
+                try: os.remove(filepath)
+                except: pass
+                return jsonify({
+                    'success': False,
+                    'message': 'Failed to parse file. Please verify it is a valid, non-empty CSV or Excel (.xlsx) file.'
+                }), 400
             return jsonify({
                 'success': True,
                 'preview': True,
@@ -497,340 +960,380 @@ def upload_leads_file():
                 'filepath': filepath,
                 'filename': filename
             })
-        
-        # Full import with optional mapping
+            
+        # Full Import with custom mappings
         mapping_str = request.form.get('column_mapping', '')
         column_mapping = json.loads(mapping_str) if mapping_str else None
         
         new_leads = file_parser.parse_file(filepath, column_mapping)
         if not new_leads:
-            return jsonify({'success': False, 'message': 'Could not extract any leads from this file format.'}), 400
-        
-        # Detect duplicates
+            return jsonify({'success': False, 'message': 'No leads could be imported from the file.'}), 400
+            
+        # Get existing suppression list to skip unsubscribed emails
         conn = database.get_db()
-        cursor = conn.cursor()
-        cursor.execute('SELECT contact_email FROM leads')
-        existing_emails = set(row['contact_email'].lower() for row in cursor.fetchall())
-        
-        duplicates = []
-        unique_leads = []
-        for l in new_leads:
-            if l['contact_email'].lower() in existing_emails:
-                duplicates.append(l['contact_email'])
-            else:
-                unique_leads.append(l)
-                existing_emails.add(l['contact_email'].lower())
-        
-        # Insert unique leads
-        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        for l in unique_leads:
-            cursor.execute('''
-                INSERT INTO leads (
-                    company_name, website, industry, location, app_status,
-                    contact_email, whatsapp_number, linkedin, subject, pitch,
-                    status, scheduled_time, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                l['company_name'], l['website'], l['industry'], l['location'], l['app_status'],
-                l['contact_email'], l['whatsapp_number'], l['linkedin'], l['subject'], l['pitch'],
-                'Pending', None, now
-            ))
-        conn.commit()
-        conn.close()
-        
-        msg = f'Successfully imported {len(unique_leads)} leads'
-        if duplicates:
-            msg += f'. Skipped {len(duplicates)} duplicates.'
-        
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT email FROM suppression_list")
+            suppressed_emails = set(row['email'].lower() for row in cursor.fetchall())
+            
+            # Check duplicate emails already in this campaign
+            cursor.execute("SELECT recipient_email FROM leads WHERE campaign_id = ?", (campaign_id,))
+            existing_campaign_emails = set(row['recipient_email'].lower() for row in cursor.fetchall())
+            
+            imported = 0
+            duplicates = 0
+            suppressed = 0
+            now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            for l in new_leads:
+                email_lower = l['recipient_email'].lower().strip()
+                
+                if email_lower in suppressed_emails:
+                    suppressed += 1
+                elif email_lower in existing_campaign_emails:
+                    duplicates += 1
+                else:
+                    cursor.execute('''
+                        INSERT INTO leads (
+                            campaign_id, recipient_email, cc, bcc, subject, body, attachments, variables, status, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?)
+                    ''', (
+                        campaign_id, l['recipient_email'], l['cc'], l['bcc'], l['subject'], 
+                        l['body'], l['attachments'], l['variables'], now, now
+                    ))
+                    existing_campaign_emails.add(email_lower)
+                    imported += 1
+                    
+            conn.commit()
+        finally:
+            conn.close()
+            
+        # Clean up file
+        try:
+            os.remove(filepath)
+        except:
+            pass
+            
         return jsonify({
             'success': True,
-            'message': msg,
-            'imported': len(unique_leads),
-            'duplicates': len(duplicates),
-            'duplicate_emails': duplicates[:10]  # First 10
+            'message': f"Successfully imported {imported} leads. Skipped {duplicates} duplicates & {suppressed} unsubscribed.",
+            'imported': imported,
+            'duplicates': duplicates,
+            'suppressed': suppressed
         })
     except Exception as e:
-        return jsonify({'success': False, 'message': f'Error parsing file: {str(e)}'}), 500
+        return jsonify({'success': False, 'message': f'Error importing file: {str(e)}'}), 500
 
-@app.route('/api/leads/<int:lead_id>/send', methods=['POST'])
-def send_instant_lead(lead_id):
+# --- Email Open Tracking Pixel ---
+@app.route('/api/track/open/<int:lead_id>', methods=['GET'])
+def track_open(lead_id):
     conn = database.get_db()
     cursor = conn.cursor()
-    cursor.execute('SELECT key, value FROM settings')
-    settings = {r['key']: r['value'] for r in cursor.fetchall()}
-    conn.close()
+    cursor.execute("SELECT campaign_id, recipient_email FROM leads WHERE id = ?", (lead_id,))
+    lead = cursor.fetchone()
     
-    # Check rate limit
-    if not check_rate_limit(settings):
-        return jsonify({
-            'success': False, 
-            'message': 'Rate limit reached. Please wait before sending more emails to avoid spam filters.'
-        }), 429
-    
-    try:
-        success, msg = email_service.dispatch_lead_email(lead_id, settings)
-        if success:
-            update_send_tracker()
-        return jsonify({'success': success, 'message': msg})
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)}), 500
-
-@app.route('/api/leads/<int:lead_id>/schedule', methods=['POST'])
-def schedule_lead_email(lead_id):
-    data = request.get_json() or {}
-    sched_time = data.get('scheduled_time', '').strip()
-    
-    if not sched_time:
-        return jsonify({'success': False, 'message': 'Please provide a valid schedule date & time.'}), 400
+    if lead:
+        campaign_id = lead['campaign_id']
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        ip = request.remote_addr
+        ua = request.user_agent.string
         
-    # Format or validate datetime
-    conn = database.get_db()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE leads SET status = 'Scheduled', scheduled_time = ? WHERE id = ?", (sched_time, lead_id))
-    conn.commit()
-    conn.close()
-    return jsonify({'success': True, 'message': f'Email successfully scheduled for {sched_time}.'})
-
-@app.route('/api/leads/bulk', methods=['POST'])
-def bulk_actions():
-    data = request.get_json() or {}
-    action = data.get('action', '')
-    lead_ids = data.get('ids', [])
-    sched_time = data.get('scheduled_time', '')
-    
-    if not lead_ids:
-        return jsonify({'success': False, 'message': 'No leads selected.'}), 400
+        # Increment count
+        cursor.execute("UPDATE leads SET open_count = open_count + 1, last_opened = ? WHERE id = ?", (now, lead_id))
         
-    conn = database.get_db()
-    cursor = conn.cursor()
-    
-    cursor.execute('SELECT key, value FROM settings')
-    settings = {r['key']: r['value'] for r in cursor.fetchall()}
-    
-    results = {'success': 0, 'failed': 0, 'errors': []}
-    
-    if action == 'delete':
-        placeholders = ','.join('?' for _ in lead_ids)
-        cursor.execute(f'DELETE FROM leads WHERE id IN ({placeholders})', lead_ids)
-        cursor.execute(f'DELETE FROM logs WHERE lead_id IN ({placeholders})', lead_ids)
+        # Log activity
+        cursor.execute('''
+            INSERT INTO tracking_logs (lead_id, campaign_id, activity_type, timestamp, details, ip_address, user_agent)
+            VALUES (?, ?, 'opened', ?, ?, ?, ?)
+        ''', (lead_id, campaign_id, now, f"Email opened by {lead['recipient_email']}", ip, ua))
+        
         conn.commit()
-        conn.close()
-        return jsonify({'success': True, 'message': f'Successfully deleted {len(lead_ids)} leads.'})
-        
-    elif action == 'schedule':
-        if not sched_time:
-            conn.close()
-            return jsonify({'success': False, 'message': 'Please provide a scheduled time.'}), 400
-            
-        placeholders = ','.join('?' for _ in lead_ids)
-        cursor.execute(f"UPDATE leads SET status = 'Scheduled', scheduled_time = ? WHERE id IN ({placeholders})", [sched_time] + lead_ids)
-        conn.commit()
-        conn.close()
-        return jsonify({'success': True, 'message': f'Successfully scheduled {len(lead_ids)} emails for {sched_time}.'})
-        
-    elif action == 'send':
-        conn.close()
-        
-        # Check rate limits for bulk send
-        if not check_rate_limit(settings):
-            return jsonify({
-                'success': False, 
-                'message': 'Rate limit reached. Reduce batch size or increase cooldown settings.'
-            }), 429
-        
-        for idx, lid in enumerate(lead_ids):
-            try:
-                suc, m = email_service.dispatch_lead_email(lid, settings)
-                if suc:
-                    results['success'] += 1
-                    update_send_tracker()
-                else:
-                    results['failed'] += 1
-                    results['errors'].append(f"Lead #{lid}: {m}")
-            except Exception as e:
-                results['failed'] += 1
-                results['errors'].append(f"Lead #{lid}: {str(e)}")
-            
-            # Smart cooldown between bulk emails
-            if idx < len(lead_ids) - 1:  # Not last email
-                cooldown = calculate_dynamic_cooldown(settings)
-                print(f"[Bulk Send] Cooldown {cooldown}s before next email...")
-                time.sleep(cooldown)
-                
-                # Check if we hit batch limit
-                if not check_rate_limit(settings):
-                    results['errors'].append(f"Rate limit reached after {results['success']} emails")
-                    break
-        
-        return jsonify({
-            'success': True, 
-            'message': f'Bulk dispatch: {results["success"]} sent, {results["failed"]} failed.', 
-            'details': results
-        })
-        
-    elif action == 'reset':
-        placeholders = ','.join('?' for _ in lead_ids)
-        cursor.execute(f"UPDATE leads SET status = 'Pending', scheduled_time = NULL, error_message = '' WHERE id IN ({placeholders})", lead_ids)
-        conn.commit()
-        conn.close()
-        return jsonify({'success': True, 'message': f'Successfully reset {len(lead_ids)} leads to Pending status.'})
         
     conn.close()
-    return jsonify({'success': False, 'message': 'Unknown action.'}), 400
+    
+    # Serve 1x1 pixel image
+    pixel_data = base64_pixel = (
+        b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00'
+        b'\xff\xff\xff\x21\xf9\x04\x01\x00\x00\x00\x00\x2c\x00\x00\x00\x00'
+        b'\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b'
+    )
+    response = make_response(pixel_data)
+    response.headers['Content-Type'] = 'image/gif'
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return response
 
-@app.route('/api/templates', methods=['GET'])
-def get_templates():
+# --- Email Link Click Tracking ---
+@app.route('/api/track/click/<int:lead_id>', methods=['GET'])
+def track_click(lead_id):
+    destination_url = request.args.get('url', '').strip()
+    if not destination_url:
+        return "Missing URL parameters", 400
+        
     conn = database.get_db()
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM templates ORDER BY is_default DESC, id ASC')
-    templates = [dict(r) for r in cursor.fetchall()]
+    cursor.execute("SELECT campaign_id, recipient_email FROM leads WHERE id = ?", (lead_id,))
+    lead = cursor.fetchone()
+    
+    if lead:
+        campaign_id = lead['campaign_id']
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        ip = request.remote_addr
+        ua = request.user_agent.string
+        
+        # Increment click count
+        cursor.execute("UPDATE leads SET click_count = click_count + 1, last_clicked = ? WHERE id = ?", (now, lead_id))
+        
+        # Log activity
+        cursor.execute('''
+            INSERT INTO tracking_logs (lead_id, campaign_id, activity_type, timestamp, details, ip_address, user_agent)
+            VALUES (?, ?, 'clicked', ?, ?, ?, ?)
+        ''', (lead_id, campaign_id, now, f"Clicked link: {destination_url}", ip, ua))
+        
+        conn.commit()
+        
     conn.close()
-    return jsonify(templates)
-
-@app.route('/api/templates', methods=['POST'])
-def add_template():
-    data = request.get_json() or {}
-    conn = database.get_db()
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO templates (name, subject, body, is_default)
-        VALUES (?, ?, ?, 0)
-    ''', (
-        data.get('name', 'New Template').strip(),
-        data.get('subject', 'Your App').strip(),
-        data.get('body', 'Hi {{company_name}}, ...').strip()
+    
+    # Redirect to final destination URL
+    return make_response(render_template_string(
+        f"<html><head><meta http-equiv='refresh' content='0;url={destination_url}'></head><body>Redirecting...</body></html>"
     ))
-    conn.commit()
-    conn.close()
-    return jsonify({'success': True, 'message': 'Template added successfully.'})
 
-@app.route('/api/templates/<int:template_id>', methods=['PUT'])
-def update_template(template_id):
-    data = request.get_json() or {}
+# --- Unsubscribe ---
+@app.route('/unsubscribe/<int:lead_id>', methods=['GET'])
+def unsubscribe_recipient(lead_id):
     conn = database.get_db()
     cursor = conn.cursor()
-    cursor.execute('''
-        UPDATE templates SET name = ?, subject = ?, body = ? WHERE id = ?
-    ''', (
-        data.get('name', '').strip(),
-        data.get('subject', '').strip(),
-        data.get('body', '').strip(),
-        template_id
-    ))
-    conn.commit()
-    conn.close()
-    return jsonify({'success': True, 'message': 'Template updated successfully.'})
-
-@app.route('/api/templates/<int:template_id>', methods=['DELETE'])
-def delete_template(template_id):
-    conn = database.get_db()
-    cursor = conn.cursor()
-    cursor.execute('DELETE FROM templates WHERE id = ? AND is_default = 0', (template_id,))
-    conn.commit()
-    conn.close()
-    return jsonify({'success': True, 'message': 'Template deleted successfully.'})
-
-@app.route('/api/templates/<int:template_id>/generate', methods=['POST'])
-def generate_pitch_from_template(template_id):
-    data = request.get_json() or {}
-    lead = data.get('lead', {})
+    cursor.execute("SELECT campaign_id, recipient_email FROM leads WHERE id = ?", (lead_id,))
+    lead = cursor.fetchone()
     
-    conn = database.get_db()
-    cursor = conn.cursor()
-    cursor.execute('SELECT subject, body FROM templates WHERE id = ?', (template_id,))
-    t = cursor.fetchone()
-    conn.close()
-    
-    if not t:
-        return jsonify({'success': False, 'message': 'Template not found.'}), 404
+    if lead:
+        recipient = lead['recipient_email']
+        campaign_id = lead['campaign_id']
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-    subj = t['subject']
-    body = t['body']
-    
-    # Replace placeholders
-    replacements = {
-        '{{company_name}}': lead.get('company_name', 'Client'),
-        '{{website}}': lead.get('website', 'your website'),
-        '{{industry}}': lead.get('industry', 'your sector'),
-        '{{location}}': lead.get('location', 'your location'),
-        '{{app_status}}': lead.get('app_status', 'Website Only'),
-        '{{contact_email}}': lead.get('contact_email', 'your email'),
-        '{{whatsapp_number}}': lead.get('whatsapp_number', '+91 9510539603')
-    }
-    
-    for k, v in replacements.items():
-        subj = subj.replace(k, str(v))
-        body = body.replace(k, str(v))
+        # Mark as unsubscribed in leads
+        cursor.execute("UPDATE leads SET unsubscribed = 1 WHERE recipient_email = ?", (recipient,))
         
-    return jsonify({'success': True, 'subject': subj, 'pitch': body})
-
-@app.route('/api/logs', methods=['GET'])
-def get_audit_logs():
-    conn = database.get_db()
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM logs ORDER BY timestamp DESC LIMIT 100')
-    logs = [dict(r) for r in cursor.fetchall()]
+        # Add to global suppression list
+        cursor.execute("INSERT OR IGNORE INTO suppression_list (email, reason, unsubscribed_at, campaign_id) VALUES (?, 'Unsubscribed via email link', ?, ?)",
+                       (recipient.lower().strip(), now, campaign_id))
+                       
+        # Log tracking activity
+        cursor.execute('''
+            INSERT INTO tracking_logs (lead_id, campaign_id, activity_type, timestamp, details)
+            VALUES (?, ?, 'unsubscribed', ?, 'Recipient opted out of campaigns')
+        ''', (lead_id, campaign_id, now))
+        
+        conn.commit()
+        
     conn.close()
-    return jsonify(logs)
+    
+    # Render neat landing page
+    html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Unsubscribed Successfully</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+        <style>
+            body { font-family: 'Inter', sans-serif; text-align: center; padding: 60px 20px; background-color: #F9FAFB; color: #1F2937; }
+            .card { max-width: 440px; margin: 0 auto; background: white; padding: 40px; border-radius: 24px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02); border: 1px solid #E5E7EB; }
+            h1 { font-size: 22px; font-weight: 600; color: #111827; margin-top: 16px; margin-bottom: 8px; }
+            p { font-size: 14px; color: #6B7280; line-height: 1.5; margin-bottom: 0; }
+            .success-icon { display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px; background-color: #ECFDF5; color: #10B981; border-radius: 50%; font-size: 28px; }
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <div class="success-icon">&#10004;</div>
+            <h1>Successfully Unsubscribed</h1>
+            <p>You have been removed from our list. You will no longer receive automated email campaigns from this system.</p>
+        </div>
+    </body>
+    </html>
+    """
+    return render_template_string(html)
 
-@app.route('/api/leads/validate-field', methods=['POST'])
-def validate_lead_field():
-    """Validate individual field values"""
-    data = request.get_json() or {}
-    field = data.get('field')
-    value = data.get('value', '').strip()
-    
-    errors = []
-    
-    if field == 'contact_email':
-        if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', value):
-            errors.append('Invalid email format')
-    elif field == 'website':
-        if not re.match(r'^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', value):
-            errors.append('Invalid website format')
-    
-    return jsonify({'valid': len(errors) == 0, 'errors': errors})
-
-@app.route('/api/column-mappings', methods=['GET', 'POST'])
-def manage_column_mappings():
-    """Save/retrieve column mappings for future imports"""
+# --- Suppression List Management ---
+@app.route('/api/suppression-list', methods=['GET', 'POST'])
+def manage_suppression_list():
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
     conn = database.get_db()
     cursor = conn.cursor()
     
     if request.method == 'GET':
-        filename = request.args.get('filename')
-        if filename:
-            cursor.execute('SELECT file_column, system_field FROM column_mappings WHERE file_name = ?', (filename,))
-            mappings = {row['file_column']: row['system_field'] for row in cursor.fetchall()}
-            conn.close()
-            return jsonify(mappings)
+        cursor.execute("SELECT * FROM suppression_list ORDER BY id DESC")
+        suppressions = [dict(r) for r in cursor.fetchall()]
         conn.close()
-        return jsonify({})
-    
+        return jsonify(suppressions)
+        
     elif request.method == 'POST':
         data = request.get_json() or {}
-        filename = data.get('filename')
-        mappings = data.get('mappings', {})
+        email = data.get('email', '').strip().lower()
+        reason = data.get('reason', 'Manual Suppression').strip()
         
-        # Clear old mappings
-        cursor.execute('DELETE FROM column_mappings WHERE file_name = ?', (filename,))
-        
-        # Save new mappings
+        if not email or "@" not in email:
+            conn.close()
+            return jsonify({'success': False, 'message': 'Please provide a valid email address.'}), 400
+            
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        for file_col, sys_field in mappings.items():
-            if sys_field:  # Only save mapped fields
-                cursor.execute('''
-                    INSERT INTO column_mappings (file_name, file_column, system_field, created_at)
-                    VALUES (?, ?, ?, ?)
-                ''', (filename, file_col, sys_field, now))
-        
+        cursor.execute("INSERT OR IGNORE INTO suppression_list (email, reason, unsubscribed_at) VALUES (?, ?, ?)",
+                       (email, reason, now))
         conn.commit()
         conn.close()
-        return jsonify({'success': True, 'message': 'Mappings saved'})
+        return jsonify({'success': True, 'message': f'{email} added to suppression list.'})
 
+@app.route('/api/suppression-list/<int:sup_id>', methods=['DELETE'])
+def delete_suppression(sup_id):
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
+    conn = database.get_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM suppression_list WHERE id = ?", (sup_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'message': 'Email removed from suppression list.'})
+
+# --- Campaign Reports and Exports ---
+@app.route('/api/campaigns/<int:campaign_id>/export', methods=['GET'])
+def export_campaign_report(campaign_id):
+    user_id = get_logged_in_user()
+    if not user_id:
+        return "Unauthorized", 401
+        
+    fmt = request.args.get('format', 'csv').lower()
+    
+    # Ownership Check
+    conn = database.get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM campaigns WHERE id = ? AND created_by = ?", (campaign_id, user_id))
+    camp = cursor.fetchone()
+    conn.close()
+    
+    if not camp:
+        return "Campaign not found", 404
+        
+    filename_base = camp['name'].replace(' ', '_').lower()
+    
+    if fmt == 'csv':
+        csv_data = export_service.generate_csv(campaign_id)
+        response = make_response(csv_data)
+        response.headers['Content-Disposition'] = f'attachment; filename=report_{filename_base}.csv'
+        response.headers['Content-Type'] = 'text/csv'
+        return response
+        
+    elif fmt == 'excel':
+        excel_data = export_service.generate_excel(campaign_id)
+        response = make_response(excel_data)
+        response.headers['Content-Disposition'] = f'attachment; filename=report_{filename_base}.xlsx'
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        return response
+        
+    elif fmt == 'pdf':
+        pdf_data = export_service.generate_pdf(campaign_id)
+        response = make_response(pdf_data)
+        response.headers['Content-Disposition'] = f'attachment; filename=report_{filename_base}.pdf'
+        response.headers['Content-Type'] = 'application/pdf'
+        return response
+        
+    return "Unsupported format type.", 400
+
+@app.route('/api/campaigns/<int:campaign_id>/stats', methods=['GET'])
+def get_campaign_stats(campaign_id):
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
+    data = export_service.get_campaign_data(campaign_id)
+    if not data:
+        return jsonify({'success': False, 'message': 'Campaign not found.'}), 404
+        
+    # Get tracking logs for live updates
+    conn = database.get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM tracking_logs WHERE campaign_id = ? ORDER BY id DESC LIMIT 50", (campaign_id,))
+    logs = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    
+    data['recent_logs'] = logs
+    return jsonify(data)
+
+# --- Global Dashboard Stats ---
+@app.route('/api/dashboard/summary', methods=['GET'])
+def get_dashboard_summary():
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
+    conn = database.get_db()
+    cursor = conn.cursor()
+    
+    # Counts
+    cursor.execute("SELECT COUNT(*) FROM campaigns WHERE created_by = ?", (user_id,))
+    total_campaigns = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM campaigns WHERE created_by = ? AND status = 'running'", (user_id,))
+    active_campaigns = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM campaigns WHERE created_by = ? AND status = 'scheduled'", (user_id,))
+    scheduled_campaigns = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM campaigns WHERE created_by = ? AND status = 'completed'", (user_id,))
+    completed_campaigns = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM campaigns WHERE created_by = ? AND status = 'failed'", (user_id,))
+    failed_campaigns = cursor.fetchone()[0]
+    
+    # Global Leads Metrics for this user
+    cursor.execute('''
+        SELECT COUNT(*) as total,
+               SUM(CASE WHEN status='Sent' THEN 1 ELSE 0 END) as sent,
+               SUM(CASE WHEN status='Failed' THEN 1 ELSE 0 END) as failed,
+               SUM(CASE WHEN status='Pending' OR status='Processing' THEN 1 ELSE 0 END) as pending,
+               SUM(CASE WHEN status='Scheduled' THEN 1 ELSE 0 END) as scheduled,
+               SUM(CASE WHEN open_count > 0 THEN 1 ELSE 0 END) as opens,
+               SUM(CASE WHEN click_count > 0 THEN 1 ELSE 0 END) as clicks,
+               SUM(CASE WHEN bounce_status != 'none' THEN 1 ELSE 0 END) as bounces,
+               SUM(CASE WHEN unsubscribed > 0 THEN 1 ELSE 0 END) as unsubscribes
+        FROM leads WHERE campaign_id IN (SELECT id FROM campaigns WHERE created_by = ?)
+    ''', (user_id,))
+    
+    row = cursor.fetchone()
+    conn.close()
+    
+    metrics = dict(row) if row['total'] > 0 else {
+        'total': 0, 'sent': 0, 'failed': 0, 'pending': 0, 'scheduled': 0,
+        'opens': 0, 'clicks': 0, 'bounces': 0, 'unsubscribes': 0
+    }
+    
+    # Safe percentages
+    sent_cnt = metrics.get('sent') or 0
+    total_cnt = metrics.get('total') or 0
+    
+    metrics['success_rate'] = round((sent_cnt / total_cnt * 100), 1) if total_cnt > 0 else 0
+    metrics['open_rate'] = round(((metrics.get('opens') or 0) / sent_cnt * 100), 1) if sent_cnt > 0 else 0
+    metrics['click_rate'] = round(((metrics.get('clicks') or 0) / sent_cnt * 100), 1) if sent_cnt > 0 else 0
+    metrics['bounce_rate'] = round(((metrics.get('bounces') or 0) / total_cnt * 100), 1) if total_cnt > 0 else 0
+    
+    return jsonify({
+        'campaigns': {
+            'total': total_campaigns,
+            'active': active_campaigns,
+            'scheduled': scheduled_campaigns,
+            'completed': completed_campaigns,
+            'failed': failed_campaigns
+        },
+        'leads_metrics': metrics
+    })
+
+# --- Rate Limit API status ---
 @app.route('/api/rate-limit-status', methods=['GET'])
 def get_rate_limit_status():
-    """Get current rate limiting status"""
     global email_send_tracker
     
     conn = database.get_db()
@@ -839,10 +1342,9 @@ def get_rate_limit_status():
     settings = {r['key']: r['value'] for r in cursor.fetchall()}
     conn.close()
     
-    daily_limit = int(settings.get('daily_email_limit', 100))
+    daily_limit = int(settings.get('daily_email_limit', 500))
     emails_sent = email_send_tracker['emails_sent_today']
     remaining = max(0, daily_limit - emails_sent)
-    
     can_send = check_rate_limit(settings)
     
     return jsonify({

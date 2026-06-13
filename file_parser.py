@@ -1,186 +1,199 @@
 import openpyxl
-import pypdf
 import csv
+import json
 import re
 
 def extract_raw_data(file_path):
-    """Extract raw headers and rows for preview/mapping"""
+    """Extract raw headers and sample rows for preview and mapping"""
     ext = file_path.split('.')[-1].lower()
     
     if ext in ['xlsx', 'xls']:
-        wb = openpyxl.load_workbook(file_path)
-        sheet = wb.active
-        rows = list(sheet.rows)
-        if not rows:
-            return [], []
-        headers = [str(cell.value).strip() if cell.value else f'Column_{i}' for i, cell in enumerate(rows[0])]
-        data_rows = [[str(cell.value) if cell.value else '' for cell in row] for row in rows[1:6]]  # First 5 rows
-        return headers, data_rows
-    
-    elif ext == 'csv':
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-            reader = csv.reader(f)
-            rows = list(reader)
+        try:
+            wb = openpyxl.load_workbook(file_path, data_only=True)
+            sheet = wb.active
+            rows = list(sheet.rows)
             if not rows:
                 return [], []
-            headers = rows[0]
-            data_rows = rows[1:6]  # First 5 rows
+            headers = [str(cell.value).strip() if cell.value is not None else f'Column_{i}' for i, cell in enumerate(rows[0])]
+            data_rows = [[str(cell.value).strip() if cell.value is not None else '' for cell in row] for row in rows[1:6]] # First 5 rows
             return headers, data_rows
-    
+        except Exception as e:
+            print(f"[Parser Error] Failed to read Excel: {str(e)}")
+            return [], []
+            
+    elif ext == 'csv':
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                reader = csv.reader(f)
+                rows = list(reader)
+                if not rows:
+                    return [], []
+                headers = [h.strip() for h in rows[0]]
+                data_rows = [[c.strip() for c in row] for row in rows[1:6]] # First 5 rows
+                return headers, data_rows
+        except Exception as e:
+            print(f"[Parser Error] Failed to read CSV: {str(e)}")
+            return [], []
+            
     return [], []
 
 def parse_file(file_path, column_mapping=None):
-    """Parse file with optional column mapping"""
+    """Parse file and return lead dicts with variables mapping"""
     ext = file_path.split('.')[-1].lower()
     leads = []
     
     if ext in ['xlsx', 'xls', 'csv']:
-        if ext in ['xlsx', 'xls']:
-            wb = openpyxl.load_workbook(file_path)
-            sheet = wb.active
-            rows = list(sheet.rows)
-            headers = [str(cell.value).strip().lower() if cell.value else '' for cell in rows[0]]
-            data_rows = [[str(cell.value) if cell.value else '' for cell in row] for row in rows[1:]]
-        else:  # CSV
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                reader = csv.reader(f)
-                all_rows = list(reader)
-                if not all_rows:
-                    return []
-                headers = [h.strip().lower() for h in all_rows[0]]
-                data_rows = all_rows[1:]
+        headers_original = []
+        data_rows = []
         
-        # Use provided mapping or auto-detect
+        if ext in ['xlsx', 'xls']:
+            try:
+                wb = openpyxl.load_workbook(file_path, data_only=True)
+                sheet = wb.active
+                rows = list(sheet.rows)
+                if not rows:
+                    return []
+                headers_original = [str(cell.value).strip() if cell.value is not None else f'Column_{i}' for i, cell in enumerate(rows[0])]
+                data_rows = [[str(cell.value).strip() if cell.value is not None else '' for cell in row] for row in rows[1:]]
+            except Exception as e:
+                print(f"[Parser Error] Failed to parse Excel: {str(e)}")
+                return []
+        else: # CSV
+            try:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    reader = csv.reader(f)
+                    all_rows = list(reader)
+                    if not all_rows:
+                        return []
+                    headers_original = [h.strip() for h in all_rows[0]]
+                    data_rows = [[c.strip() for c in row] for row in all_rows[1:]]
+            except Exception as e:
+                print(f"[Parser Error] Failed to parse CSV: {str(e)}")
+                return []
+                
+        # Lowercase headers for auto matching
+        headers_lower = [h.lower() for h in headers_original]
+        
+        # Use provided mapping or auto-detect index mapping
         if column_mapping:
-            col_map = column_mapping
+            # Map system keys (like 'recipient_email') to their column indices
+            col_map = {k: int(v) for k, v in column_mapping.items() if v is not None and str(v).isdigit()}
         else:
+            # Auto detect fallback mapping
             def find_col_idx(keywords):
-                for i, col in enumerate(headers):
+                for i, col in enumerate(headers_lower):
                     for kw in keywords:
                         if kw in col:
                             return i
                 return None
-            
+                
             col_map = {
-                'company_name': find_col_idx(['company', 'business', 'name', 'client']),
-                'website': find_col_idx(['website', 'url', 'domain']),
-                'industry': find_col_idx(['industry', 'niche', 'sector']),
-                'location': find_col_idx(['location', 'city', 'country']),
-                'app_status': find_col_idx(['status', 'app']),
-                'contact_email': find_col_idx(['email', 'contact', 'mail']),
-                'whatsapp_number': find_col_idx(['whatsapp', 'phone', 'number', 'mobile']),
-                'linkedin': find_col_idx(['linkedin', 'social']),
-                'subject': find_col_idx(['subject']),
-                'pitch': find_col_idx(['pitch', 'message', 'body', 'details', 'text'])
+                'recipient_email': find_col_idx(['email', 'contact', 'mail', 'to']),
+                'cc': find_col_idx(['cc']),
+                'bcc': find_col_idx(['bcc']),
+                'subject': find_col_idx(['subject', 'title']),
+                'body': find_col_idx(['body', 'pitch', 'message', 'text']),
+                'attachments': find_col_idx(['attachment', 'file', 'files']),
+                'company_name': find_col_idx(['company', 'business', 'name', 'client'])
             }
-        
-        # Process data rows
+            
+        # Process rows
         for cells in data_rows:
-            company = cells[col_map['company_name']].strip() if col_map.get('company_name') is not None and len(cells) > col_map['company_name'] else "Unnamed Company"
-            email = cells[col_map['contact_email']].strip() if col_map.get('contact_email') is not None and len(cells) > col_map['contact_email'] else "contact@example.com"
-            web = cells[col_map['website']].strip() if col_map.get('website') is not None and len(cells) > col_map['website'] else "example.com"
+            # Skip empty rows
+            if not any(cells):
+                continue
+                
+            # Extract variables (all column names and values)
+            variables = {}
+            for idx, col_name in enumerate(headers_original):
+                if idx < len(cells):
+                    variables[col_name] = cells[idx]
+                    # Also include a lowercase trimmed version for easy mapping
+                    variables[col_name.lower().strip()] = cells[idx]
             
-            if company == "Unnamed Company" and web != "example.com":
-                company = web.split('.')[0].capitalize()
+            # Map standard fields
+            email = ""
+            email_idx = col_map.get('recipient_email')
+            if email_idx is not None and email_idx < len(cells):
+                email = cells[email_idx].strip()
+                
+            # If email is empty, skip
+            if not email or "@" not in email:
+                continue
+                
+            cc = ""
+            cc_idx = col_map.get('cc')
+            if cc_idx is not None and cc_idx < len(cells):
+                cc = cells[cc_idx].strip()
+            elif column_mapping and 'cc' in column_mapping and column_mapping['cc'] is not None:
+                val = str(column_mapping['cc']).strip()
+                if not val.isdigit() and val != '':
+                    cc = val
+                
+            bcc = ""
+            bcc_idx = col_map.get('bcc')
+            if bcc_idx is not None and bcc_idx < len(cells):
+                bcc = cells[bcc_idx].strip()
+            elif column_mapping and 'bcc' in column_mapping and column_mapping['bcc'] is not None:
+                val = str(column_mapping['bcc']).strip()
+                if not val.isdigit() and val != '':
+                    bcc = val
+                
+            subject = ""
+            subj_idx = col_map.get('subject')
+            if subj_idx is not None and subj_idx < len(cells):
+                subject = cells[subj_idx].strip()
+            elif column_mapping and 'subject' in column_mapping and column_mapping['subject'] is not None:
+                val = str(column_mapping['subject']).strip()
+                if not val.isdigit() and val != '':
+                    subject = val
+                
+            body = ""
+            body_idx = col_map.get('body')
+            if body_idx is not None and body_idx < len(cells):
+                body = cells[body_idx].strip()
+            elif column_mapping and 'body' in column_mapping and column_mapping['body'] is not None:
+                val = str(column_mapping['body']).strip()
+                if not val.isdigit() and val != '':
+                    body = val
+                
+            attachments = ""
+            attach_idx = col_map.get('attachments')
+            if attach_idx is not None and attach_idx < len(cells):
+                attach_val = cells[attach_idx].strip()
+                if attach_val:
+                    # Parse as JSON list or comma separated
+                    if attach_val.startswith('[') and attach_val.endswith(']'):
+                        attachments = attach_val
+                    else:
+                        attachments = json.dumps([f.strip() for f in attach_val.split(',') if f.strip()])
+            elif column_mapping and 'attachments' in column_mapping and column_mapping['attachments'] is not None:
+                val = str(column_mapping['attachments']).strip()
+                if not val.isdigit() and val != '':
+                    attachments = val
             
-            email = email.lstrip('UIAponly')
-            
-            ind = cells[col_map['industry']].strip() if col_map.get('industry') is not None and len(cells) > col_map['industry'] else "Technology"
-            loc = cells[col_map['location']].strip() if col_map.get('location') is not None and len(cells) > col_map['location'] else "India"
-            app_st = cells[col_map['app_status']].strip() if col_map.get('app_status') is not None and len(cells) > col_map['app_status'] else "Review Needed"
-            phone = cells[col_map['whatsapp_number']].strip() if col_map.get('whatsapp_number') is not None and len(cells) > col_map['whatsapp_number'] else "+91 9510539603"
-            linkedin = cells[col_map['linkedin']].strip() if col_map.get('linkedin') is not None and len(cells) > col_map['linkedin'] else ""
-            sub = cells[col_map['subject']].strip() if col_map.get('subject') is not None and len(cells) > col_map['subject'] else f"Your {company} app — quick thought"
-            pitch = cells[col_map['pitch']].strip() if col_map.get('pitch') is not None and len(cells) > col_map['pitch'] else ""
-            
-            if not pitch or pitch == 'None':
-                pitch = f"Hi Team at {company},\n\nI came across {company} and your platform at {web}. I noticed your current app setup is {app_st}.\n\nI run Bhatt Technologies, a specialized app development agency.\n\nHappy to connect. Reply here or WhatsApp at {phone}.\n\nBest regards,\nVaibhav Bhatt\nBhatt Technologies"
+            # Add company name variable
+            comp_idx = col_map.get('company_name')
+            company_name = ""
+            if comp_idx is not None and comp_idx < len(cells):
+                company_name = cells[comp_idx].strip()
+            elif column_mapping and 'company_name' in column_mapping and column_mapping['company_name'] is not None:
+                val = str(column_mapping['company_name']).strip()
+                if not val.isdigit() and val != '':
+                    company_name = val
+                    
+            if not company_name:
+                company_name = variables.get('company', variables.get('business', 'Client'))
+            variables['company_name'] = company_name
             
             leads.append({
-                "company_name": company,
-                "website": web,
-                "industry": ind,
-                "location": loc,
-                "app_status": app_st,
-                "contact_email": email,
-                "whatsapp_number": phone,
-                "linkedin": linkedin,
-                "subject": sub,
-                "pitch": pitch,
-                "status": "Pending"
+                'recipient_email': email,
+                'cc': cc,
+                'bcc': bcc,
+                'subject': subject,
+                'body': body,
+                'attachments': attachments,
+                'variables': json.dumps(variables)
             })
             
-    elif ext == 'pdf':
-        reader = pypdf.PdfReader(file_path)
-        full_text = ""
-        for page in reader.pages:
-            full_text += page.extract_text() + "\n"
-
-        lines = [line.strip() for line in full_text.split('\n') if line.strip()]
-        
-        for i in range(len(lines)):
-            line = lines[i]
-            if line.startswith("Hi,") or ("DhruvBuilds" in line and not lines[i-1].startswith("Hi,")):
-                continue
-            if "Company/Business Name" in line:
-                continue
-                
-            if i + 1 < len(lines) and lines[i+1].startswith("Hi,"):
-                meta = lines[i]
-                pitch = lines[i+1]
-                
-                meta_spaced = re.sub(r'(https?://)', r' \1', meta)
-                meta_spaced = re.sub(r'([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z]{2,})', r' \1 ', meta_spaced)
-                
-                email_match = re.search(r'([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z]{2,})', meta_spaced)
-                contact_email = email_match.group(1).strip() if email_match else "contact@example.com"
-                if contact_email.startswith("UI"): contact_email = contact_email[2:]
-                elif contact_email.startswith("App"): contact_email = contact_email[3:]
-                elif contact_email.startswith("only"): contact_email = contact_email[4:]
-
-                parts = meta.split('Pending')
-                if len(parts) > 1:
-                    subject = parts[1].strip()
-                    before_pending = parts[0].strip()
-                else:
-                    subject = "App Development Pitch"
-                    before_pending = meta
-                    
-                web_match = re.search(r'([a-zA-Z0-9-]+\.(?:com|co|in|org|net|co\.in))', before_pending, re.IGNORECASE)
-                website = web_match.group(1).strip() if web_match else "example.com"
-                
-                if website != "example.com" and website in before_pending:
-                    company_name = before_pending.split(website)[0].strip()
-                else:
-                    company_name = before_pending[:15].strip()
-                    
-                company_name = re.sub(r'([a-z])([A-Z])', r'\1 \2', company_name)
-                if not company_name or len(company_name) < 2:
-                    company_name = website.split('.')[0].capitalize()
-                    
-                phone_match = re.search(r'(\+?\d{1,3}[\s-]?\d{4,5}[\s-]?\d{4,5})', pitch)
-                whatsapp_number = phone_match.group(1) if phone_match else "+91 9510539603"
-                
-                industry = "Health & Wellness"
-                if "EdTech" in before_pending or "Education" in before_pending or "Learning" in before_pending or "IIDE" in before_pending or "Vedantu" in before_pending or "Cuemath" in before_pending:
-                    industry = "EdTech & Learning"
-                elif "E-commerce" in before_pending or "Commerce" in before_pending or "Store" in before_pending or "IndiaMART" in before_pending:
-                    industry = "E-commerce & Retail"
-                elif "Fitness" in before_pending or "Gym" in before_pending or "Fit" in before_pending or "Health" in before_pending:
-                    industry = "Fitness & Wellness"
-
-                leads.append({
-                    "company_name": company_name,
-                    "website": website,
-                    "industry": industry,
-                    "location": "India",
-                    "app_status": "Review Needed",
-                    "contact_email": contact_email,
-                    "whatsapp_number": whatsapp_number,
-                    "linkedin": "",
-                    "subject": subject,
-                    "pitch": pitch,
-                    "status": "Pending"
-                })
-                
     return leads
