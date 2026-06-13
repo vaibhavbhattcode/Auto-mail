@@ -1,61 +1,97 @@
 import openpyxl
 import pypdf
+import csv
 import re
 
-def parse_file(file_path):
+def extract_raw_data(file_path):
+    """Extract raw headers and rows for preview/mapping"""
+    ext = file_path.split('.')[-1].lower()
+    
+    if ext in ['xlsx', 'xls']:
+        wb = openpyxl.load_workbook(file_path)
+        sheet = wb.active
+        rows = list(sheet.rows)
+        if not rows:
+            return [], []
+        headers = [str(cell.value).strip() if cell.value else f'Column_{i}' for i, cell in enumerate(rows[0])]
+        data_rows = [[str(cell.value) if cell.value else '' for cell in row] for row in rows[1:6]]  # First 5 rows
+        return headers, data_rows
+    
+    elif ext == 'csv':
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            reader = csv.reader(f)
+            rows = list(reader)
+            if not rows:
+                return [], []
+            headers = rows[0]
+            data_rows = rows[1:6]  # First 5 rows
+            return headers, data_rows
+    
+    return [], []
+
+def parse_file(file_path, column_mapping=None):
+    """Parse file with optional column mapping"""
     ext = file_path.split('.')[-1].lower()
     leads = []
     
-    if ext in ['xlsx', 'xls']:
-        # Use openpyxl directly
-        wb = openpyxl.load_workbook(file_path)
-        sheet = wb.active
+    if ext in ['xlsx', 'xls', 'csv']:
+        if ext in ['xlsx', 'xls']:
+            wb = openpyxl.load_workbook(file_path)
+            sheet = wb.active
+            rows = list(sheet.rows)
+            headers = [str(cell.value).strip().lower() if cell.value else '' for cell in rows[0]]
+            data_rows = [[str(cell.value) if cell.value else '' for cell in row] for row in rows[1:]]
+        else:  # CSV
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                reader = csv.reader(f)
+                all_rows = list(reader)
+                if not all_rows:
+                    return []
+                headers = [h.strip().lower() for h in all_rows[0]]
+                data_rows = all_rows[1:]
         
-        # Get headers
-        headers = []
-        for cell in sheet[1]:
-            headers.append(str(cell.value).strip().lower() if cell.value else '')
-        
-        # Helper to find column index
-        def find_col_idx(keywords):
-            for i, col in enumerate(headers):
-                for kw in keywords:
-                    if kw in col:
-                        return i
-            return None
-        
-        col_company = find_col_idx(['company', 'business', 'name', 'client'])
-        col_web = find_col_idx(['website', 'url', 'domain'])
-        col_ind = find_col_idx(['industry', 'niche', 'sector'])
-        col_loc = find_col_idx(['location', 'city', 'country'])
-        col_status = find_col_idx(['status', 'app'])
-        col_email = find_col_idx(['email', 'contact', 'mail'])
-        col_phone = find_col_idx(['whatsapp', 'phone', 'number', 'mobile'])
-        col_linkedin = find_col_idx(['linkedin', 'social'])
-        col_sub = find_col_idx(['subject'])
-        col_pitch = find_col_idx(['pitch', 'message', 'body', 'details', 'text'])
-        
-        # Process rows (skip header)
-        for row in list(sheet.rows)[1:]:
-            cells = [cell.value for cell in row]
+        # Use provided mapping or auto-detect
+        if column_mapping:
+            col_map = column_mapping
+        else:
+            def find_col_idx(keywords):
+                for i, col in enumerate(headers):
+                    for kw in keywords:
+                        if kw in col:
+                            return i
+                return None
             
-            company = str(cells[col_company]).strip() if col_company is not None and cells[col_company] else "Unnamed Company"
-            if company == "Unnamed Company" and col_web is not None and cells[col_web]:
-                company = str(cells[col_web]).split('.')[0].capitalize()
+            col_map = {
+                'company_name': find_col_idx(['company', 'business', 'name', 'client']),
+                'website': find_col_idx(['website', 'url', 'domain']),
+                'industry': find_col_idx(['industry', 'niche', 'sector']),
+                'location': find_col_idx(['location', 'city', 'country']),
+                'app_status': find_col_idx(['status', 'app']),
+                'contact_email': find_col_idx(['email', 'contact', 'mail']),
+                'whatsapp_number': find_col_idx(['whatsapp', 'phone', 'number', 'mobile']),
+                'linkedin': find_col_idx(['linkedin', 'social']),
+                'subject': find_col_idx(['subject']),
+                'pitch': find_col_idx(['pitch', 'message', 'body', 'details', 'text'])
+            }
+        
+        # Process data rows
+        for cells in data_rows:
+            company = cells[col_map['company_name']].strip() if col_map.get('company_name') is not None and len(cells) > col_map['company_name'] else "Unnamed Company"
+            email = cells[col_map['contact_email']].strip() if col_map.get('contact_email') is not None and len(cells) > col_map['contact_email'] else "contact@example.com"
+            web = cells[col_map['website']].strip() if col_map.get('website') is not None and len(cells) > col_map['website'] else "example.com"
             
-            email = str(cells[col_email]).strip() if col_email is not None and cells[col_email] else "contact@example.com"
-            if email.startswith("UI"): email = email[2:]
-            elif email.startswith("App"): email = email[3:]
-            elif email.startswith("only"): email = email[4:]
+            if company == "Unnamed Company" and web != "example.com":
+                company = web.split('.')[0].capitalize()
             
-            web = str(cells[col_web]).strip() if col_web is not None and cells[col_web] else "example.com"
-            ind = str(cells[col_ind]).strip() if col_ind is not None and cells[col_ind] else "Technology"
-            loc = str(cells[col_loc]).strip() if col_loc is not None and cells[col_loc] else "India"
-            app_st = str(cells[col_status]).strip() if col_status is not None and cells[col_status] else "Review Needed"
-            phone = str(cells[col_phone]).strip() if col_phone is not None and cells[col_phone] else "+91 9510539603"
-            linkedin = str(cells[col_linkedin]).strip() if col_linkedin is not None and cells[col_linkedin] else ""
-            sub = str(cells[col_sub]).strip() if col_sub is not None and cells[col_sub] else f"Your {company} app — quick thought"
-            pitch = str(cells[col_pitch]).strip() if col_pitch is not None and cells[col_pitch] else ""
+            email = email.lstrip('UIAponly')
+            
+            ind = cells[col_map['industry']].strip() if col_map.get('industry') is not None and len(cells) > col_map['industry'] else "Technology"
+            loc = cells[col_map['location']].strip() if col_map.get('location') is not None and len(cells) > col_map['location'] else "India"
+            app_st = cells[col_map['app_status']].strip() if col_map.get('app_status') is not None and len(cells) > col_map['app_status'] else "Review Needed"
+            phone = cells[col_map['whatsapp_number']].strip() if col_map.get('whatsapp_number') is not None and len(cells) > col_map['whatsapp_number'] else "+91 9510539603"
+            linkedin = cells[col_map['linkedin']].strip() if col_map.get('linkedin') is not None and len(cells) > col_map['linkedin'] else ""
+            sub = cells[col_map['subject']].strip() if col_map.get('subject') is not None and len(cells) > col_map['subject'] else f"Your {company} app — quick thought"
+            pitch = cells[col_map['pitch']].strip() if col_map.get('pitch') is not None and len(cells) > col_map['pitch'] else ""
             
             if not pitch or pitch == 'None':
                 pitch = f"Hi Team at {company},\n\nI came across {company} and your platform at {web}. I noticed your current app setup is {app_st}.\n\nI run Bhatt Technologies, a specialized app development agency.\n\nHappy to connect. Reply here or WhatsApp at {phone}.\n\nBest regards,\nVaibhav Bhatt\nBhatt Technologies"

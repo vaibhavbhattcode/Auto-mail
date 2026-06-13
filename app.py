@@ -3,6 +3,7 @@ import json
 import datetime
 import time
 import threading
+import re
 from flask import Flask, request, jsonify, render_template, session, send_from_directory
 from flask_cors import CORS
 import werkzeug.utils
@@ -404,21 +405,52 @@ def upload_leads_file():
     if file.filename == '':
         return jsonify({'success': False, 'message': 'No selected file.'}), 400
         
-    os.makedirs('/home/user/uploads', exist_ok=True)
+    os.makedirs('uploads', exist_ok=True)
     filename = werkzeug.utils.secure_filename(file.filename)
-    filepath = os.path.join('/home/user/uploads', filename)
+    filepath = os.path.join('uploads', filename)
     file.save(filepath)
     
     try:
-        new_leads = file_parser.parse_file(filepath)
+        # Check if preview mode
+        preview_mode = request.form.get('preview', 'false') == 'true'
+        
+        if preview_mode:
+            headers, sample_rows = file_parser.extract_raw_data(filepath)
+            return jsonify({
+                'success': True,
+                'preview': True,
+                'headers': headers,
+                'sample_rows': sample_rows,
+                'filepath': filepath,
+                'filename': filename
+            })
+        
+        # Full import with optional mapping
+        mapping_str = request.form.get('column_mapping', '')
+        column_mapping = json.loads(mapping_str) if mapping_str else None
+        
+        new_leads = file_parser.parse_file(filepath, column_mapping)
         if not new_leads:
             return jsonify({'success': False, 'message': 'Could not extract any leads from this file format.'}), 400
-            
+        
+        # Detect duplicates
         conn = database.get_db()
         cursor = conn.cursor()
-        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute('SELECT contact_email FROM leads')
+        existing_emails = set(row['contact_email'].lower() for row in cursor.fetchall())
         
+        duplicates = []
+        unique_leads = []
         for l in new_leads:
+            if l['contact_email'].lower() in existing_emails:
+                duplicates.append(l['contact_email'])
+            else:
+                unique_leads.append(l)
+                existing_emails.add(l['contact_email'].lower())
+        
+        # Insert unique leads
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        for l in unique_leads:
             cursor.execute('''
                 INSERT INTO leads (
                     company_name, website, industry, location, app_status,
@@ -432,7 +464,18 @@ def upload_leads_file():
             ))
         conn.commit()
         conn.close()
-        return jsonify({'success': True, 'message': f'Successfully parsed and added {len(new_leads)} leads from {filename}!'})
+        
+        msg = f'Successfully imported {len(unique_leads)} leads'
+        if duplicates:
+            msg += f'. Skipped {len(duplicates)} duplicates.'
+        
+        return jsonify({
+            'success': True,
+            'message': msg,
+            'imported': len(unique_leads),
+            'duplicates': len(duplicates),
+            'duplicate_emails': duplicates[:10]  # First 10
+        })
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error parsing file: {str(e)}'}), 500
 
@@ -622,6 +665,61 @@ def get_audit_logs():
     logs = [dict(r) for r in cursor.fetchall()]
     conn.close()
     return jsonify(logs)
+
+@app.route('/api/leads/validate-field', methods=['POST'])
+def validate_lead_field():
+    """Validate individual field values"""
+    data = request.get_json() or {}
+    field = data.get('field')
+    value = data.get('value', '').strip()
+    
+    errors = []
+    
+    if field == 'contact_email':
+        if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', value):
+            errors.append('Invalid email format')
+    elif field == 'website':
+        if not re.match(r'^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', value):
+            errors.append('Invalid website format')
+    
+    return jsonify({'valid': len(errors) == 0, 'errors': errors})
+
+@app.route('/api/column-mappings', methods=['GET', 'POST'])
+def manage_column_mappings():
+    """Save/retrieve column mappings for future imports"""
+    conn = database.get_db()
+    cursor = conn.cursor()
+    
+    if request.method == 'GET':
+        filename = request.args.get('filename')
+        if filename:
+            cursor.execute('SELECT file_column, system_field FROM column_mappings WHERE file_name = ?', (filename,))
+            mappings = {row['file_column']: row['system_field'] for row in cursor.fetchall()}
+            conn.close()
+            return jsonify(mappings)
+        conn.close()
+        return jsonify({})
+    
+    elif request.method == 'POST':
+        data = request.get_json() or {}
+        filename = data.get('filename')
+        mappings = data.get('mappings', {})
+        
+        # Clear old mappings
+        cursor.execute('DELETE FROM column_mappings WHERE file_name = ?', (filename,))
+        
+        # Save new mappings
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        for file_col, sys_field in mappings.items():
+            if sys_field:  # Only save mapped fields
+                cursor.execute('''
+                    INSERT INTO column_mappings (file_name, file_column, system_field, created_at)
+                    VALUES (?, ?, ?, ?)
+                ''', (filename, file_col, sys_field, now))
+        
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'message': 'Mappings saved'})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
