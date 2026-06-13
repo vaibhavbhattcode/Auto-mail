@@ -53,14 +53,21 @@ def init_db():
     )
     ''')
     
-    # Default settings
+    # Default settings with anti-spam configuration
     default_settings = {
         'google_email': '',
         'google_app_password': '',
         'sender_name': 'Vaibhav Bhatt - Bhatt Technologies',
         'smtp_host': 'smtp.gmail.com',
         'smtp_port': '587',
-        'max_emails_per_hour': '50',
+        'max_emails_per_hour': '20',
+        'min_cooldown_seconds': '60',
+        'max_cooldown_seconds': '180',
+        'emails_per_batch': '5',
+        'batch_cooldown_minutes': '10',
+        'daily_email_limit': '100',
+        'randomize_cooldown': 'true',
+        'warmup_mode': 'false',
         'auto_send_enabled': 'true',
         'mail_provider': 'gmail',
         'company_name': 'Bhatt Technologies',

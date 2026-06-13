@@ -21,7 +21,16 @@ CORS(app, supports_credentials=True)
 # Ensure database is initialized
 database.init_db()
 
-# --- Background Scheduler Loop ---
+# Global state for rate limiting
+email_send_tracker = {
+    'last_send_time': None,
+    'emails_sent_today': 0,
+    'last_reset_date': None,
+    'batch_count': 0,
+    'last_batch_time': None
+}
+
+# --- Background Scheduler Loop with Anti-Spam ---
 def background_scheduler_loop():
     while True:
         try:
@@ -35,6 +44,8 @@ def background_scheduler_loop():
                 WHERE status = 'Scheduled' 
                   AND scheduled_time IS NOT NULL 
                   AND scheduled_time <= ?
+                ORDER BY scheduled_time ASC
+                LIMIT 1
             ''', (now,))
             due_leads = cursor.fetchall()
             
@@ -44,19 +55,81 @@ def background_scheduler_loop():
                 settings = {row['key']: row['value'] for row in cursor.fetchall()}
                 conn.close()
                 
+                # Check rate limits
+                if not check_rate_limit(settings):
+                    print(f"[Scheduler] Rate limit reached, skipping this cycle...")
+                    time.sleep(20)
+                    continue
+                
                 for l in due_leads:
-                    print(f"[Scheduler] Automatically dispatching scheduled email for Lead #{l['id']} at {now}...")
+                    print(f"[Scheduler] Dispatching scheduled email for Lead #{l['id']} at {now}...")
                     email_service.dispatch_lead_email(l['id'], settings)
-                    time.sleep(1) # Polite gap between emails
+                    
+                    # Dynamic cooldown
+                    cooldown = calculate_dynamic_cooldown(settings)
+                    print(f"[Scheduler] Waiting {cooldown}s cooldown before next email...")
+                    time.sleep(cooldown)
             else:
                 conn.close()
         except Exception as e:
             print(f"[Scheduler Error]: {str(e)}")
             
-        time.sleep(20) # Check every 20 seconds
+        time.sleep(20)
 
 # Start background thread
 threading.Thread(target=background_scheduler_loop, daemon=True).start()
+
+
+# --- Rate Limiting & Anti-Spam Functions ---
+def check_rate_limit(settings):
+    """Check if we can send email based on rate limits"""
+    global email_send_tracker
+    
+    now = datetime.datetime.now()
+    today = now.date()
+    
+    # Reset daily counter
+    if email_send_tracker['last_reset_date'] != today:
+        email_send_tracker['emails_sent_today'] = 0
+        email_send_tracker['last_reset_date'] = today
+        email_send_tracker['batch_count'] = 0
+    
+    # Check daily limit
+    daily_limit = int(settings.get('daily_email_limit', 100))
+    if email_send_tracker['emails_sent_today'] >= daily_limit:
+        return False
+    
+    # Check batch limits
+    emails_per_batch = int(settings.get('emails_per_batch', 5))
+    if email_send_tracker['batch_count'] >= emails_per_batch:
+        batch_cooldown_minutes = int(settings.get('batch_cooldown_minutes', 10))
+        if email_send_tracker['last_batch_time']:
+            time_since_batch = (now - email_send_tracker['last_batch_time']).total_seconds() / 60
+            if time_since_batch < batch_cooldown_minutes:
+                return False
+        # Reset batch
+        email_send_tracker['batch_count'] = 0
+        email_send_tracker['last_batch_time'] = now
+    
+    return True
+
+def calculate_dynamic_cooldown(settings):
+    """Calculate randomized cooldown to appear human"""
+    min_cooldown = int(settings.get('min_cooldown_seconds', 60))
+    max_cooldown = int(settings.get('max_cooldown_seconds', 180))
+    randomize = settings.get('randomize_cooldown', 'true') == 'true'
+    
+    if randomize:
+        return random.randint(min_cooldown, max_cooldown)
+    else:
+        return min_cooldown
+
+def update_send_tracker():
+    """Update global send tracker after successful send"""
+    global email_send_tracker
+    email_send_tracker['last_send_time'] = datetime.datetime.now()
+    email_send_tracker['emails_sent_today'] += 1
+    email_send_tracker['batch_count'] += 1
 
 
 # --- Authentication Helpers ---
@@ -487,8 +560,17 @@ def send_instant_lead(lead_id):
     settings = {r['key']: r['value'] for r in cursor.fetchall()}
     conn.close()
     
+    # Check rate limit
+    if not check_rate_limit(settings):
+        return jsonify({
+            'success': False, 
+            'message': 'Rate limit reached. Please wait before sending more emails to avoid spam filters.'
+        }), 429
+    
     try:
         success, msg = email_service.dispatch_lead_email(lead_id, settings)
+        if success:
+            update_send_tracker()
         return jsonify({'success': success, 'message': msg})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -547,19 +629,44 @@ def bulk_actions():
         return jsonify({'success': True, 'message': f'Successfully scheduled {len(lead_ids)} emails for {sched_time}.'})
         
     elif action == 'send':
-        conn.close() # Close to allow individual dispatches to use independent txns
-        for lid in lead_ids:
+        conn.close()
+        
+        # Check rate limits for bulk send
+        if not check_rate_limit(settings):
+            return jsonify({
+                'success': False, 
+                'message': 'Rate limit reached. Reduce batch size or increase cooldown settings.'
+            }), 429
+        
+        for idx, lid in enumerate(lead_ids):
             try:
                 suc, m = email_service.dispatch_lead_email(lid, settings)
-                if suc: results['success'] += 1
-                else: 
+                if suc:
+                    results['success'] += 1
+                    update_send_tracker()
+                else:
                     results['failed'] += 1
                     results['errors'].append(f"Lead #{lid}: {m}")
             except Exception as e:
                 results['failed'] += 1
                 results['errors'].append(f"Lead #{lid}: {str(e)}")
-            time.sleep(0.5)
-        return jsonify({'success': True, 'message': f'Bulk dispatch complete. {results["success"]} sent successfully, {results["failed"]} failed.', 'details': results})
+            
+            # Smart cooldown between bulk emails
+            if idx < len(lead_ids) - 1:  # Not last email
+                cooldown = calculate_dynamic_cooldown(settings)
+                print(f"[Bulk Send] Cooldown {cooldown}s before next email...")
+                time.sleep(cooldown)
+                
+                # Check if we hit batch limit
+                if not check_rate_limit(settings):
+                    results['errors'].append(f"Rate limit reached after {results['success']} emails")
+                    break
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Bulk dispatch: {results["success"]} sent, {results["failed"]} failed.', 
+            'details': results
+        })
         
     elif action == 'reset':
         placeholders = ','.join('?' for _ in lead_ids)
@@ -720,6 +827,32 @@ def manage_column_mappings():
         conn.commit()
         conn.close()
         return jsonify({'success': True, 'message': 'Mappings saved'})
+
+@app.route('/api/rate-limit-status', methods=['GET'])
+def get_rate_limit_status():
+    """Get current rate limiting status"""
+    global email_send_tracker
+    
+    conn = database.get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT key, value FROM settings')
+    settings = {r['key']: r['value'] for r in cursor.fetchall()}
+    conn.close()
+    
+    daily_limit = int(settings.get('daily_email_limit', 100))
+    emails_sent = email_send_tracker['emails_sent_today']
+    remaining = max(0, daily_limit - emails_sent)
+    
+    can_send = check_rate_limit(settings)
+    
+    return jsonify({
+        'emails_sent_today': emails_sent,
+        'daily_limit': daily_limit,
+        'remaining_today': remaining,
+        'can_send_now': can_send,
+        'batch_count': email_send_tracker['batch_count'],
+        'last_send_time': email_send_tracker['last_send_time'].isoformat() if email_send_tracker['last_send_time'] else None
+    })
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

@@ -4,9 +4,17 @@ from email.mime.text import MIMEText
 import datetime
 import database
 import re
+import random
+import time
 
 def send_email_actual(to_email, subject, body, settings):
     provider = settings.get('mail_provider', 'gmail').strip().lower()
+    
+    # Anti-spam headers for better deliverability
+    msg = MIMEMultipart('alternative')
+    msg['X-Mailer'] = 'Bhatt Technologies Outreach System'
+    msg['X-Priority'] = '3'
+    msg['Importance'] = 'Normal'
     
     # Auto-configure based on provider
     if provider == 'titan':
@@ -27,11 +35,13 @@ def send_email_actual(to_email, subject, body, settings):
     
     if not user or not password:
         raise ValueError("Email and password/app password are not configured in Settings.")
-        
-    msg = MIMEMultipart('alternative')
+    
+    # Professional email formatting
     msg['From'] = f"{sender_name} <{user}>"
     msg['To'] = to_email
     msg['Subject'] = subject
+    msg['Reply-To'] = user
+    msg['Date'] = datetime.datetime.now().strftime('%a, %d %b %Y %H:%M:%S %z')
     
     # Create HTML version of body
     html_body = body.replace('\n', '<br>')
