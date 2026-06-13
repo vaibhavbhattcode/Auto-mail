@@ -72,35 +72,123 @@ def index():
 @app.route('/api/auth/status', methods=['GET'])
 def auth_status():
     logged_in = session.get('logged_in', False)
+    user_id = session.get('user_id')
+    
     conn = database.get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT value FROM settings WHERE key = 'admin_password'")
-    row = cursor.fetchone()
+    
+    # Check if any users exist
+    cursor.execute("SELECT COUNT(*) as count FROM users")
+    users_exist = cursor.fetchone()['count'] > 0
+    
+    user_info = None
+    if logged_in and user_id:
+        cursor.execute("SELECT id, username, email, full_name, role FROM users WHERE id = ?", (user_id,))
+        user_row = cursor.fetchone()
+        if user_row:
+            user_info = dict(user_row)
+    
     conn.close()
     
     return jsonify({
         'logged_in': logged_in,
-        'has_password_setup': bool(row and row['value'])
+        'first_time_setup': not users_exist,
+        'user': user_info
     })
 
 @app.route('/api/auth/login', methods=['POST'])
 def login():
     data = request.get_json() or {}
+    username = data.get('username', '').strip()
     password = data.get('password', '').strip()
+    
+    if not username or not password:
+        return jsonify({'success': False, 'message': 'Username and password required'}), 400
     
     conn = database.get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT value FROM settings WHERE key = 'admin_password'")
-    row = cursor.fetchone()
+    
+    # Check if this is first time setup
+    cursor.execute("SELECT COUNT(*) as count FROM users")
+    if cursor.fetchone()['count'] == 0:
+        # First time setup - create admin user
+        password_hash = database.hash_password(password)
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute('''
+            INSERT INTO users (username, password_hash, email, full_name, role, created_at, last_login)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (username, password_hash, data.get('email', ''), data.get('full_name', username), 'admin', now, now))
+        conn.commit()
+        user_id = cursor.lastrowid
+        session['logged_in'] = True
+        session['user_id'] = user_id
+        session['username'] = username
+        conn.close()
+        return jsonify({'success': True, 'message': 'Account created successfully!', 'first_time': True})
+    
+    # Regular login
+    cursor.execute("SELECT id, username, password_hash, email, full_name, role FROM users WHERE username = ? AND is_active = 1", (username,))
+    user = cursor.fetchone()
+    
+    if not user:
+        conn.close()
+        return jsonify({'success': False, 'message': 'Invalid credentials'}), 401
+    
+    if not database.verify_password(password, user['password_hash']):
+        conn.close()
+        return jsonify({'success': False, 'message': 'Invalid credentials'}), 401
+    
+    # Update last login
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute("UPDATE users SET last_login = ? WHERE id = ?", (now, user['id']))
+    conn.commit()
     conn.close()
     
-    correct_password = row['value'] if (row and row['value']) else 'dhruv2026'
+    session['logged_in'] = True
+    session['user_id'] = user['id']
+    session['username'] = user['username']
+    session['role'] = user['role']
     
-    if password == correct_password or password == 'dhruv2026':
-        session['logged_in'] = True
-        return jsonify({'success': True, 'message': 'Successfully logged in.'})
-    else:
-        return jsonify({'success': False, 'message': 'Invalid secure password.'}), 401
+    return jsonify({'success': True, 'message': 'Login successful', 'user': {
+        'id': user['id'],
+        'username': user['username'],
+        'email': user['email'],
+        'full_name': user['full_name'],
+        'role': user['role']
+    }})
+
+@app.route('/api/auth/change-password', methods=['POST'])
+def change_password():
+    if not session.get('logged_in'):
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    
+    data = request.get_json() or {}
+    current_password = data.get('current_password', '').strip()
+    new_password = data.get('new_password', '').strip()
+    
+    if not current_password or not new_password:
+        return jsonify({'success': False, 'message': 'Both passwords required'}), 400
+    
+    if len(new_password) < 6:
+        return jsonify({'success': False, 'message': 'Password must be at least 6 characters'}), 400
+    
+    user_id = session.get('user_id')
+    conn = database.get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    
+    if not user or not database.verify_password(current_password, user['password_hash']):
+        conn.close()
+        return jsonify({'success': False, 'message': 'Current password incorrect'}), 401
+    
+    new_hash = database.hash_password(new_password)
+    cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user_id))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'message': 'Password changed successfully'})
 
 @app.route('/api/auth/logout', methods=['POST'])
 def logout():

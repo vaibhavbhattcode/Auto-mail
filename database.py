@@ -2,17 +2,48 @@ import sqlite3
 import json
 import datetime
 import os
+import hashlib
 
-DB_PATH = 'campaigns.db'
+DB_PATH = os.environ.get('DATABASE_PATH', 'campaigns.db')
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
+def hash_password(password):
+    """Hash password using SHA256"""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def verify_password(password, hashed):
+    """Verify password against hash"""
+    return hash_password(password) == hashed
+
 def init_db():
     conn = get_db()
     cursor = conn.cursor()
+    
+    # Users table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        email TEXT,
+        full_name TEXT,
+        role TEXT DEFAULT 'admin',
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT,
+        last_login TEXT
+    )
+    ''')
+    
+    # Check if any user exists
+    cursor.execute('SELECT COUNT(*) FROM users')
+    if cursor.fetchone()[0] == 0:
+        # No users exist - this is first time setup
+        # Password will be set on first login
+        pass
     
     # Settings table
     cursor.execute('''
@@ -24,21 +55,23 @@ def init_db():
     
     # Default settings
     default_settings = {
-        'admin_password': 'password123',
         'google_email': '',
         'google_app_password': '',
         'sender_name': 'Vaibhav Bhatt - Bhatt Technologies',
         'smtp_host': 'smtp.gmail.com',
         'smtp_port': '587',
-        'max_emails_per_hour': '30',
+        'max_emails_per_hour': '50',
         'auto_send_enabled': 'true',
-        'mail_provider': 'gmail'
+        'mail_provider': 'gmail',
+        'company_name': 'Bhatt Technologies',
+        'session_timeout': '3600',
+        'require_password_change': 'true'
     }
     
     for k, v in default_settings.items():
         cursor.execute('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)', (k, v))
         
-    # Leads table
+    # Leads table with enhanced fields
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS leads (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,18 +89,26 @@ def init_db():
         scheduled_time TEXT,
         sent_time TEXT,
         error_message TEXT,
-        created_at TEXT
+        tags TEXT,
+        priority TEXT DEFAULT 'medium',
+        source TEXT DEFAULT 'manual',
+        created_at TEXT,
+        updated_at TEXT
     )
     ''')
     
-    # Templates table
+    # Templates table with enhanced fields  
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS templates (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT,
         subject TEXT,
         body TEXT,
-        is_default INTEGER
+        category TEXT DEFAULT 'general',
+        is_default INTEGER,
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT,
+        updated_at TEXT
     )
     ''')
     
@@ -88,7 +129,10 @@ def init_db():
                 0
             )
         ]
-        cursor.executemany('INSERT INTO templates (name, subject, body, is_default) VALUES (?, ?, ?, ?)', templates)
+        cursor.executemany('INSERT INTO templates (name, subject, body, category, is_default, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', 
+            [(t[0], t[1], t[2], 'sales', t[3], 1, 
+              datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+              datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) for t in templates])
 
     # Logs table
     cursor.execute('''
@@ -133,6 +177,17 @@ def init_db():
                     datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 ))
                 
+    # Column mappings table for dynamic file imports
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS column_mappings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        file_name TEXT,
+        file_column TEXT NOT NULL,
+        system_field TEXT NOT NULL,
+        created_at TEXT
+    )
+    ''')
+    
     conn.commit()
     conn.close()
 
