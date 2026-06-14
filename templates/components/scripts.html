@@ -22,7 +22,8 @@ createApp({
             bulkSchedule: false,
             singleSchedule: false,
             previewEmail: false,
-            addManualLeads: false
+            addManualLeads: false,
+            editLead: false
         });
 
         // Add manual leads form state
@@ -763,6 +764,44 @@ createApp({
             }
         };
 
+        // Active lead being edited
+        const activeLead = reactive({
+            id: null,
+            campaign_id: null,
+            recipient_email: '',
+            cc: '',
+            bcc: '',
+            subject: '',
+            body: '',
+            variables: '{}'
+        });
+
+        const openEditLeadModal = (lead) => {
+            Object.assign(activeLead, lead);
+            modals.editLead = true;
+        };
+
+        const saveLeadDetails = async () => {
+            try {
+                const res = await fetch(`/api/campaigns/${activeLead.campaign_id}/leads/${activeLead.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(activeLead)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    modals.editLead = false;
+                    fetchActiveCampaignLeads();
+                    fetchActiveCampaignStats();
+                } else {
+                    showToast(data.message, 'error');
+                }
+            } catch (e) {
+                showToast('Failed to save lead details.', 'error');
+            }
+        };
+
         // Email Preview Modal
         const previewRenderedEmail = (lead) => {
             activePreviewLead.value = lead;
@@ -1196,7 +1235,8 @@ createApp({
             uploadAndPreview, validateMapping, getPreviewMappedValue, importLeads, handleMappingSelectorChange,
             getCampaignStatusColorClass, getCampaignStatusBadgeClass, getCampaignProgress,
             isAllLeadsSelected, toggleSelectAllLeads, openBulkScheduleAllModal, openBulkScheduleSelectedModal,
-            bulkDispatchSelected, bulkResetSelected, bulkDeleteSelected, selectedLeadIds, bulkScheduleTarget
+            bulkDispatchSelected, bulkResetSelected, bulkDeleteSelected, selectedLeadIds, bulkScheduleTarget,
+            activeLead, openEditLeadModal, saveLeadDetails
         };
     }
 }).mount('#app');
