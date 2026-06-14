@@ -1,0 +1,127 @@
+                <!-- TAB: DASHBOARD OVERVIEW -->
+                <div v-if="currentTab === 'dashboard'" class="space-y-8 animate-fadeIn">
+                    <!-- Warning banner if no SMTP configurations -->
+                    <div v-if="smtpAccounts.length === 0" class="bg-gradient-to-r from-amber-500 to-amber-600 rounded-3xl p-6 text-white shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                        <div class="flex items-start space-x-4">
+                            <div class="bg-white/20 p-3 rounded-2xl mt-0.5">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                            </div>
+                            <div>
+                                <h4 class="text-lg font-bold">SMTP Account Needed</h4>
+                                <p class="text-amber-100 text-sm mt-0.5 max-w-xl">To launch email campaigns, please configure at least one active SMTP account with your login details.</p>
+                            </div>
+                        </div>
+                        <button @click="setTab('smtp')" class="bg-white text-amber-900 font-bold px-5 py-2.5 rounded-xl hover:bg-amber-50 transition whitespace-nowrap self-stretch md:self-auto text-center">Add SMTP Account</button>
+                    </div>
+
+                    <!-- Statistics Summary Row -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm flex items-center justify-between">
+                            <div>
+                                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Campaigns</span>
+                                <h3 class="text-3xl font-black text-slate-900 dark:text-white mt-1">{{ summaryStats.campaigns.total }}</h3>
+                                <span class="text-xs text-indigo-500 font-semibold flex items-center mt-2">
+                                    <span>{{ summaryStats.campaigns.active }} active running</span>
+                                </span>
+                            </div>
+                            <div class="w-12 h-12 bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400 rounded-xl flex items-center justify-center">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                            </div>
+                        </div>
+
+                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm flex items-center justify-between">
+                            <div>
+                                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Outbox Dispatches</span>
+                                <h3 class="text-3xl font-black text-slate-900 dark:text-white mt-1">{{ summaryStats.leads_metrics.sent }}</h3>
+                                <span class="text-xs text-emerald-500 font-semibold flex items-center mt-2">
+                                    <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+                                    <span>{{ summaryStats.leads_metrics.success_rate }}% Success Rate</span>
+                                </span>
+                            </div>
+                            <div class="w-12 h-12 bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400 rounded-xl flex items-center justify-center">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                            </div>
+                        </div>
+
+                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm flex items-center justify-between">
+                            <div>
+                                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Open Rate</span>
+                                <h3 class="text-3xl font-black text-slate-900 dark:text-white mt-1">{{ summaryStats.leads_metrics.open_rate }}%</h3>
+                                <span class="text-xs text-indigo-500 font-semibold flex items-center mt-2">
+                                    <span>{{ summaryStats.leads_metrics.opens }} absolute opens</span>
+                                </span>
+                            </div>
+                            <div class="w-12 h-12 bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400 rounded-xl flex items-center justify-center">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                            </div>
+                        </div>
+
+                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm flex items-center justify-between">
+                            <div>
+                                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Click Rate</span>
+                                <h3 class="text-3xl font-black text-slate-900 dark:text-white mt-1">{{ summaryStats.leads_metrics.click_rate }}%</h3>
+                                <span class="text-xs text-blue-500 font-semibold flex items-center mt-2">
+                                    <span>{{ summaryStats.leads_metrics.clicks }} link clicks</span>
+                                </span>
+                            </div>
+                            <div class="w-12 h-12 bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400 rounded-xl flex items-center justify-center">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Double Column Charts / Tables -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <!-- Chart block -->
+                        <div class="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm flex flex-col justify-between">
+                            <div>
+                                <h3 class="text-base font-bold text-slate-900 dark:text-white">Delivery Performance</h3>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Delivery breakdown ratio for your campaigns</p>
+                                
+                                <div class="mt-6 relative h-60">
+                                    <canvas id="overviewChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Statistics side-card -->
+                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm flex flex-col justify-between">
+                            <div>
+                                <h3 class="text-base font-bold text-slate-900 dark:text-white">Outreach Health</h3>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Bounces and suppression listings summary</p>
+
+                                <div class="mt-6 space-y-4">
+                                    <div class="flex items-center justify-between p-3 rounded-2xl bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-8 h-8 rounded-lg bg-rose-100 text-rose-600 dark:bg-rose-900 dark:text-rose-400 flex items-center justify-center">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                            </div>
+                                            <div>
+                                                <p class="text-xs font-bold text-rose-950 dark:text-rose-300 leading-none">Hard Bounces</p>
+                                                <p class="text-[10px] text-rose-500 mt-0.5">Rejected addresses</p>
+                                            </div>
+                                        </div>
+                                        <span class="text-lg font-extrabold text-rose-900 dark:text-rose-200">{{ summaryStats.leads_metrics.bounces }}</span>
+                                    </div>
+
+                                    <div class="flex items-center justify-between p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-8 h-8 rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400 flex items-center justify-center">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                                            </div>
+                                            <div>
+                                                <p class="text-xs font-bold text-amber-950 dark:text-amber-300 leading-none">Opt-Outs</p>
+                                                <p class="text-[10px] text-amber-500 mt-0.5">Unsubscribed leads</p>
+                                            </div>
+                                        </div>
+                                        <span class="text-lg font-extrabold text-amber-900 dark:text-amber-200">{{ summaryStats.leads_metrics.unsubscribes }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="border-t border-slate-100 dark:border-slate-800 pt-4 mt-6 text-center">
+                                <span class="text-xs text-slate-500 dark:text-slate-400">Total suppressed emails: {{ suppressions.length }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>

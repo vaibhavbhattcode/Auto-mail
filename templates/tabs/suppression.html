@@ -1,0 +1,49 @@
+                <!-- TAB: SUPPRESSION LIST -->
+                <div v-if="currentTab === 'suppression'" class="space-y-6 animate-fadeIn">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-900 dark:text-white">Unsubscribe Suppression List</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Suppressed emails are automatically excluded from all outgoing campaigns</p>
+                        </div>
+
+                        <!-- Add manual email -->
+                        <form @submit.prevent="addSuppression" class="flex items-center space-x-2 w-full sm:w-auto">
+                            <input type="email" v-model="newSuppressionEmail" placeholder="block-email@domain.com" required
+                                   class="px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-950 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full sm:w-60">
+                            <button type="submit" class="bg-slate-900 hover:bg-slate-850 dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-xl text-xs whitespace-nowrap transition">
+                                Suppress Email
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- List table -->
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                    <th class="py-3 px-4">Suppressed Email Address</th>
+                                    <th class="py-3 px-4">Suppression Origin / Reason</th>
+                                    <th class="py-3 px-4">Opt-Out Timestamp</th>
+                                    <th class="py-3 px-4 text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 dark:divide-slate-800/80 text-xs">
+                                <tr v-for="sup in suppressions" :key="sup.id" class="hover:bg-slate-50 dark:hover:bg-slate-850/50 transition">
+                                    <td class="py-3 px-4 font-bold text-slate-900 dark:text-white">{{ sup.email }}</td>
+                                    <td class="py-3 px-4 text-slate-500">{{ sup.reason }}</td>
+                                    <td class="py-3 px-4 font-mono text-slate-400 text-[11px]">{{ sup.unsubscribed_at }}</td>
+                                    <td class="py-3 px-4 text-right">
+                                        <button @click="deleteSuppression(sup.id)" class="text-rose-500 hover:text-rose-600 font-bold hover:underline">
+                                            Remove Block
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr v-if="suppressions.length === 0">
+                                    <td colspan="4" class="py-12 text-center text-slate-400 font-medium">
+                                        No emails are currently suppressed or unsubscribed.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
