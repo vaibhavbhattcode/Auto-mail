@@ -13,6 +13,11 @@ ENCRYPTION_KEY = os.environ.get('SECRET_KEY', 'arena_agent_secure_secret_key_202
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    try:
+        conn.execute('PRAGMA journal_mode=WAL')
+        conn.execute('PRAGMA busy_timeout=5000')
+    except Exception as e:
+        print(f"[DB PRAGMA Error] {str(e)}")
     return conn
 
 def get_fernet_cipher():
