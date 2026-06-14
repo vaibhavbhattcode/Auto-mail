@@ -20,7 +20,7 @@
                                         {{ acc.sender_name || 'No Display Name' }}
                                     </h4>
                                     <span class="text-xs font-mono bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-500">
-                                        {{ acc.ssl_tls.toUpperCase() }}
+                                        {{ (acc.ssl_tls || '').toUpperCase() }}
                                     </span>
                                 </div>
                                 <div class="space-y-2 text-xs">

@@ -128,12 +128,20 @@ createApp({
                     
                     try {
                         const res = await fetch('/api/campaigns');
-                        const list = await res.json();
-                        const found = list.find(item => item.id === campaignId);
-                        if (found) {
-                            activeCampaign.value = found;
-                            fetchActiveCampaignLeads();
-                            fetchActiveCampaignStats();
+                        if (res.ok) {
+                            const list = await res.json();
+                            if (Array.isArray(list)) {
+                                const found = list.find(item => item.id === campaignId);
+                                if (found) {
+                                    activeCampaign.value = found;
+                                    fetchActiveCampaignLeads();
+                                    fetchActiveCampaignStats();
+                                } else {
+                                    window.location.hash = '#/campaigns';
+                                }
+                            } else {
+                                window.location.hash = '#/campaigns';
+                            }
                         } else {
                             window.location.hash = '#/campaigns';
                         }
@@ -274,9 +282,11 @@ createApp({
         const fetchSummaryStats = async () => {
             try {
                 const res = await fetch('/api/dashboard/summary');
-                const data = await res.json();
-                Object.assign(summaryStats, data);
-                nextTick(initOrUpdateChart);
+                if (res.ok) {
+                    const data = await res.json();
+                    Object.assign(summaryStats, data);
+                    nextTick(initOrUpdateChart);
+                }
             } catch (e) {
                 console.error(e);
             }
@@ -508,16 +518,31 @@ createApp({
                 search: leadFilters.search,
                 status: leadFilters.status
             });
-            const res = await fetch(`/api/campaigns/${activeCampaign.value.id}/leads?` + params);
-            activeCampaignLeads.value = await res.json();
+            try {
+                const res = await fetch(`/api/campaigns/${activeCampaign.value.id}/leads?` + params);
+                if (res.ok) {
+                    activeCampaignLeads.value = await res.json();
+                }
+            } catch (e) {
+                console.error(e);
+            }
         };
 
         const fetchActiveCampaignStats = async () => {
             if (!activeCampaign.value) return;
-            const res = await fetch(`/api/campaigns/${activeCampaign.value.id}/stats`);
-            activeCampaignStats.value = await res.json();
-            // Automatically update completion progress on activeCampaign
-            activeCampaign.value.status = activeCampaignStats.value.campaign.status;
+            try {
+                const res = await fetch(`/api/campaigns/${activeCampaign.value.id}/stats`);
+                if (res.ok) {
+                    const data = await res.json();
+                    activeCampaignStats.value = data;
+                    // Automatically update completion progress on activeCampaign
+                    if (data && data.campaign) {
+                        activeCampaign.value.status = data.campaign.status;
+                    }
+                }
+            } catch (e) {
+                console.error(e);
+            }
         };
 
         // Lead operations
