@@ -678,6 +678,36 @@ createApp({
             fetchSuppressions();
         };
 
+        const insertHtmlTag = (modelType, field, tagStart, tagEnd) => {
+            const textarea = document.querySelector(`textarea[data-field="${modelType}-${field}"]`) || document.querySelector(`input[data-field="${modelType}-${field}"]`);
+            if (!textarea) {
+                if (modelType === 'excel') {
+                    columnMappingCustom[field] = (columnMappingCustom[field] || '') + tagStart + tagEnd;
+                } else {
+                    addManualForm[field] = (addManualForm[field] || '') + tagStart + tagEnd;
+                }
+                return;
+            }
+            
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const text = textarea.value;
+            const selectedText = text.substring(start, end);
+            const replacement = tagStart + selectedText + tagEnd;
+            
+            const newVal = text.substring(0, start) + replacement + text.substring(end);
+            if (modelType === 'excel') {
+                columnMappingCustom[field] = newVal;
+            } else {
+                addManualForm[field] = newVal;
+            }
+            
+            nextTick(() => {
+                textarea.focus();
+                textarea.setSelectionRange(start + tagStart.length, start + tagStart.length + selectedText.length);
+            });
+        };
+
         // Manual Leads Addition
         const openAddManualLeadsModal = () => {
             addManualForm.mode = 'single';
@@ -989,7 +1019,7 @@ createApp({
             activeCampaign, activeCampaignLeads, activeCampaignStats, campaignFilters, leadFilters,
             activeSmtp, activeCampaignForm, bulkScheduleForm, singleScheduleForm, activePreviewLead,
             wizardStep, uploadError, selectedFile, previewData, columnMapping, columnMappingSelector, columnMappingCustom, isUploading, newSuppressionEmail, summaryStats,
-            addManualForm, openAddManualLeadsModal, saveManualLeads,
+            addManualForm, openAddManualLeadsModal, saveManualLeads, insertHtmlTag,
             setTab, toggleDarkMode, toggleSendingMode, handleAuth, handleLogout,
             openAddSmtpModal, openEditSmtpModal, saveSmtpAccount, deleteSmtpAccount, testSmtpConnection,
             openCreateCampaignModal, openEditCampaignModal, saveCampaign, duplicateCampaign, deleteCampaign, toggleCampaignStatus,

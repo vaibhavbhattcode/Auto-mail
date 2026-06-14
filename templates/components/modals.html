@@ -56,14 +56,39 @@
                             </select>
                         </div>
                         <!-- Custom Static value template input -->
-                        <div v-if="columnMappingSelector[field.value] === 'custom'" class="pl-4 border-l-2 border-indigo-500 space-y-1.5 animate-fadeIn">
+                        <div v-if="columnMappingSelector[field.value] === 'custom'" class="pl-4 border-l-2 border-indigo-500 space-y-2.5 animate-fadeIn">
                             <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Static Text or template placeholders:</label>
+                            
+                            <!-- HTML Toolbar for Email Body (Excel) -->
+                            <div v-if="field.value === 'body'" class="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700/80">
+                                <button type="button" @click="insertHtmlTag('excel', field.value, '<b>', '</b>')" class="px-2.5 py-0.5 text-[10px] font-extrabold hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition text-slate-700 dark:text-slate-300 focus:outline-none" title="Bold">B</button>
+                                <button type="button" @click="insertHtmlTag('excel', field.value, '<i>', '</i>')" class="px-2.5 py-0.5 text-[10px] hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition text-slate-700 dark:text-slate-300 italic focus:outline-none" title="Italic">I</button>
+                                <button type="button" @click="insertHtmlTag('excel', field.value, '<a href=\'https://\'>', '</a>')" class="px-2.5 py-0.5 text-[10px] hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition text-slate-700 dark:text-slate-300 underline focus:outline-none" title="Hyperlink">Link</button>
+                                <button type="button" @click="insertHtmlTag('excel', field.value, '<br>', '')" class="px-2.5 py-0.5 text-[10px] hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition text-slate-700 dark:text-slate-300 focus:outline-none" title="Line Break">Line Break</button>
+                                <button type="button" @click="insertHtmlTag('excel', field.value, '<p>', '</p>')" class="px-2.5 py-0.5 text-[10px] hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition text-slate-700 dark:text-slate-300 focus:outline-none" title="Paragraph">Paragraph</button>
+                            </div>
+
                             <input v-if="field.value !== 'body'" type="text" v-model="columnMappingCustom[field.value]" 
+                                   :data-field="'excel-' + field.value"
                                    placeholder="e.g. Hello {{company_name}} or dynamic subject..."
                                    class="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white" />
                             <textarea v-else v-model="columnMappingCustom[field.value]" rows="4"
+                                      :data-field="'excel-' + field.value"
                                       placeholder="e.g. Hi {{company_name}},\n\nWe noticed your app profile and..."
                                       class="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"></textarea>
+
+                            <!-- Clickable Variable Badges (Excel) -->
+                            <div class="space-y-1 mt-1">
+                                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Insert Variable:</span>
+                                <div class="flex flex-wrap gap-1">
+                                    <button v-for="(header, idx) in previewData.headers" :key="idx"
+                                            type="button"
+                                            @click="insertHtmlTag('excel', field.value, '{{' + header + '}}', '')"
+                                            class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[10px] font-bold rounded-lg transition text-slate-600 dark:text-slate-300 focus:outline-none">
+                                        + {{ header }}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -167,14 +192,39 @@
 
                     <div>
                         <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Email Subject Line</label>
-                        <input type="text" v-model="addManualForm.subject" placeholder="e.g. Partnership Opportunity with {{company_name}}"
+                        <input type="text" v-model="addManualForm.subject" 
+                               data-field="manual-subject"
+                               placeholder="e.g. Partnership Opportunity with {{company_name}}"
                                class="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white">
                     </div>
 
                     <div>
                         <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Email Body Content</label>
-                        <textarea v-model="addManualForm.body" placeholder="Write your pitch text here. Use {{company_name}} and custom placeholders..." rows="4"
+                        
+                        <!-- HTML Toolbar for Email Body (Manual leads) -->
+                        <div class="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700/80 mb-2">
+                            <button type="button" @click="insertHtmlTag('manual', 'body', '<b>', '</b>')" class="px-2.5 py-0.5 text-[10px] font-extrabold hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition text-slate-700 dark:text-slate-300 focus:outline-none" title="Bold">B</button>
+                            <button type="button" @click="insertHtmlTag('manual', 'body', '<i>', '</i>')" class="px-2.5 py-0.5 text-[10px] hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition text-slate-700 dark:text-slate-300 italic focus:outline-none" title="Italic">I</button>
+                            <button type="button" @click="insertHtmlTag('manual', 'body', '<a href=\'https://\'>', '</a>')" class="px-2.5 py-0.5 text-[10px] hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition text-slate-700 dark:text-slate-300 underline focus:outline-none" title="Hyperlink">Link</button>
+                            <button type="button" @click="insertHtmlTag('manual', 'body', '<br>', '')" class="px-2.5 py-0.5 text-[10px] hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition text-slate-700 dark:text-slate-300 focus:outline-none" title="Line Break">Line Break</button>
+                            <button type="button" @click="insertHtmlTag('manual', 'body', '<p>', '</p>')" class="px-2.5 py-0.5 text-[10px] hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition text-slate-700 dark:text-slate-300 focus:outline-none" title="Paragraph">Paragraph</button>
+                        </div>
+
+                        <textarea v-model="addManualForm.body" 
+                                  data-field="manual-body"
+                                  placeholder="Write your pitch text here. Use {{company_name}} and custom placeholders..." rows="4"
                                   class="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"></textarea>
+
+                        <!-- Clickable Variable Badges (Manual leads) -->
+                        <div class="space-y-1 mt-1">
+                            <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Insert Variable:</span>
+                            <div class="flex flex-wrap gap-1">
+                                <button type="button" @click="insertHtmlTag('manual', 'body', '{{company_name}}', '')" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[10px] font-bold rounded-lg transition text-slate-600 dark:text-slate-300 focus:outline-none">+ Company Name</button>
+                                <button type="button" @click="insertHtmlTag('manual', 'body', '{{recipient_email}}', '')" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[10px] font-bold rounded-lg transition text-slate-600 dark:text-slate-300 focus:outline-none">+ Recipient Email</button>
+                                <button type="button" @click="insertHtmlTag('manual', 'body', '{{cc}}', '')" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[10px] font-bold rounded-lg transition text-slate-600 dark:text-slate-300 focus:outline-none">+ CC</button>
+                                <button type="button" @click="insertHtmlTag('manual', 'body', '{{bcc}}', '')" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[10px] font-bold rounded-lg transition text-slate-600 dark:text-slate-300 focus:outline-none">+ BCC</button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
