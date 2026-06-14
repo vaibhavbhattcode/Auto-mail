@@ -210,6 +210,10 @@ def index():
         current_origin = request.url_root.rstrip('/')
         is_current_public = 'localhost' not in current_origin and '127.0.0.1' not in current_origin
         
+        # Force HTTPS for public environments to prevent mixed content blocking in email clients
+        if is_current_public and current_origin.startswith('http://'):
+            current_origin = current_origin.replace('http://', 'https://', 1)
+            
         conn = database.get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT value FROM settings WHERE key = 'tracking_domain'")
@@ -218,6 +222,10 @@ def index():
         
         is_saved_public = saved_domain and 'localhost' not in saved_domain and '127.0.0.1' not in saved_domain
         
+        # Ensure saved domain is also HTTPS if public
+        if is_saved_public and saved_domain.startswith('http://'):
+            saved_domain = saved_domain.replace('http://', 'https://', 1)
+            
         # Update conditions:
         # 1. Current origin is public (always update to public domain for live tracking)
         # 2. Or, the saved domain is not public and current origin is different
@@ -1194,7 +1202,10 @@ def track_open(lead_id):
     if lead:
         campaign_id = lead['campaign_id']
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        ip = request.remote_addr
+        # Get real client IP address from proxy headers if available
+        ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        if ip and ',' in ip:
+            ip = ip.split(',')[0].strip()
         ua = request.user_agent.string
         
         # Increment count
@@ -1236,7 +1247,10 @@ def track_click(lead_id):
     if lead:
         campaign_id = lead['campaign_id']
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        ip = request.remote_addr
+        # Get real client IP address from proxy headers if available
+        ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        if ip and ',' in ip:
+            ip = ip.split(',')[0].strip()
         ua = request.user_agent.string
         
         # Increment click count
