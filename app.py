@@ -996,7 +996,7 @@ def bulk_delete_selected_leads(campaign_id):
         
     placeholders = ','.join('?' for _ in lead_ids)
     cursor.execute(f"DELETE FROM leads WHERE id IN ({placeholders}) AND campaign_id = ?", (*lead_ids, campaign_id))
-    cursor.execute(f"DELETE FROM tracking_logs WHERE lead_id IN ({placeholders})")
+    cursor.execute(f"DELETE FROM tracking_logs WHERE lead_id IN ({placeholders})", tuple(lead_ids))
     conn.commit()
     conn.close()
     return jsonify({'success': True, 'message': f'Successfully deleted {len(lead_ids)} leads.'})
