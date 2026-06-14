@@ -66,5 +66,24 @@
         .animate-modalScale {
             animation: modalScale 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
+        
+        /* Drawer animation */
+        @keyframes slideIn {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(0); }
+        }
+        .animate-slideIn {
+            animation: slideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        
+        /* Premium focus rings override */
+        button:focus {
+            outline: 2px solid transparent;
+            outline-offset: 2px;
+        }
+        button:focus-visible {
+            outline: 2px solid rgb(99, 102, 241); /* indigo-500 */
+            outline-offset: 2px;
+        }
     </style>
 </head>

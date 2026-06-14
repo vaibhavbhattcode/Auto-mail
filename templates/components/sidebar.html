@@ -14,14 +14,14 @@
             <nav class="flex-1 space-y-1">
                 <button @click="setTab('dashboard')" 
                         :class="currentTab === 'dashboard' ? 'bg-slate-800 text-white font-semibold' : 'hover:bg-slate-800/40 hover:text-white'"
-                        class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm transition">
+                        class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm transition focus:outline-none">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2v-4zM14 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2v-4z" /></svg>
                     <span>Overview</span>
                 </button>
 
                 <button @click="setTab('campaigns')" 
                         :class="currentTab === 'campaigns' || currentTab === 'campaign-details' ? 'bg-slate-800 text-white font-semibold' : 'hover:bg-slate-800/40 hover:text-white'"
-                        class="w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm transition">
+                        class="w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm transition focus:outline-none">
                     <div class="flex items-center space-x-3">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
                         <span>Campaigns</span>
@@ -31,21 +31,21 @@
 
                 <button @click="setTab('smtp')" 
                         :class="currentTab === 'smtp' ? 'bg-slate-800 text-white font-semibold' : 'hover:bg-slate-800/40 hover:text-white'"
-                        class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm transition">
+                        class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm transition focus:outline-none">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                     <span>SMTP Accounts</span>
                 </button>
 
                 <button @click="setTab('suppression')" 
                         :class="currentTab === 'suppression' ? 'bg-slate-800 text-white font-semibold' : 'hover:bg-slate-800/40 hover:text-white'"
-                        class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm transition">
+                        class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm transition focus:outline-none">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
                     <span>Suppression List</span>
                 </button>
 
                 <button @click="setTab('settings')" 
                         :class="currentTab === 'settings' ? 'bg-slate-800 text-white font-semibold' : 'hover:bg-slate-800/40 hover:text-white'"
-                        class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm transition">
+                        class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm transition focus:outline-none">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
                     <span>Global Controls</span>
                 </button>
@@ -63,9 +63,93 @@
                     </div>
                 </div>
                 
-                <button @click="handleLogout" class="w-full flex items-center space-x-3 px-3 py-2 text-slate-500 hover:text-rose-400 hover:bg-rose-950/20 rounded-xl text-xs transition">
+                <button @click="handleLogout" class="w-full flex items-center space-x-3 px-3 py-2 text-slate-500 hover:text-rose-400 hover:bg-rose-950/20 rounded-xl text-xs transition focus:outline-none">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
                     <span>Log Out</span>
                 </button>
             </div>
         </aside>
+
+        <!-- Mobile Sidebar Drawer Overlay -->
+        <div v-if="showMobileSidebar" class="lg:hidden fixed inset-0 z-50 flex">
+            <!-- Backdrop -->
+            <div class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm animate-fadeIn" @click="showMobileSidebar = false"></div>
+            
+            <!-- Drawer Content -->
+            <aside class="relative flex flex-col w-64 bg-slate-900 dark:bg-slate-950 text-slate-400 border-r border-slate-800 p-5 h-full z-10 animate-slideIn">
+                <!-- Close Button inside sidebar header -->
+                <div class="flex items-center justify-between mb-8">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-9 h-9 bg-gradient-to-tr from-indigo-500 to-blue-600 text-white font-extrabold rounded-xl flex items-center justify-center text-base shadow-lg shadow-indigo-500/20">
+                            OC
+                        </div>
+                        <div>
+                            <h2 class="font-bold text-sm text-white leading-none">Campaign Hub</h2>
+                            <span class="text-[10px] text-indigo-400 font-semibold tracking-wider uppercase">Outreach Tool</span>
+                        </div>
+                    </div>
+                    <button @click="showMobileSidebar = false" class="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white focus:outline-none">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+
+                <!-- Nav Links -->
+                <nav class="flex-1 space-y-1">
+                    <button @click="setTab('dashboard'); showMobileSidebar = false" 
+                            :class="currentTab === 'dashboard' ? 'bg-slate-800 text-white font-semibold' : 'hover:bg-slate-800/40 hover:text-white'"
+                            class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm transition focus:outline-none">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2v-4zM14 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2v-4z" /></svg>
+                        <span>Overview</span>
+                    </button>
+
+                    <button @click="setTab('campaigns'); showMobileSidebar = false" 
+                            :class="currentTab === 'campaigns' || currentTab === 'campaign-details' ? 'bg-slate-800 text-white font-semibold' : 'hover:bg-slate-800/40 hover:text-white'"
+                            class="w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm transition focus:outline-none">
+                        <div class="flex items-center space-x-3">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                            <span>Campaigns</span>
+                        </div>
+                        <span v-if="campaigns.length > 0" class="bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">{{ campaigns.length }}</span>
+                    </button>
+
+                    <button @click="setTab('smtp'); showMobileSidebar = false" 
+                            :class="currentTab === 'smtp' ? 'bg-slate-800 text-white font-semibold' : 'hover:bg-slate-800/40 hover:text-white'"
+                            class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm transition focus:outline-none">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                        <span>SMTP Accounts</span>
+                    </button>
+
+                    <button @click="setTab('suppression'); showMobileSidebar = false" 
+                            :class="currentTab === 'suppression' ? 'bg-slate-800 text-white font-semibold' : 'hover:bg-slate-800/40 hover:text-white'"
+                            class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm transition focus:outline-none">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
+                        <span>Suppression List</span>
+                    </button>
+
+                    <button @click="setTab('settings'); showMobileSidebar = false" 
+                            :class="currentTab === 'settings' ? 'bg-slate-800 text-white font-semibold' : 'hover:bg-slate-800/40 hover:text-white'"
+                            class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm transition focus:outline-none">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
+                        <span>Global Controls</span>
+                    </button>
+                </nav>
+
+                <!-- User profile summary -->
+                <div class="border-t border-slate-800 pt-4 flex flex-col space-y-3">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-9 h-9 bg-slate-800 rounded-full flex items-center justify-center text-white font-semibold">
+                            {{ authState.user ? authState.user.full_name[0].toUpperCase() : 'U' }}
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-xs font-semibold text-white truncate">{{ authState.user ? authState.user.full_name : 'User' }}</p>
+                            <p class="text-[10px] text-slate-500 truncate">{{ authState.user ? authState.user.email : '' }}</p>
+                        </div>
+                    </div>
+                    
+                    <button @click="handleLogout(); showMobileSidebar = false" class="w-full flex items-center space-x-3 px-3 py-2 text-slate-500 hover:text-rose-400 hover:bg-rose-950/20 rounded-xl text-xs transition focus:outline-none">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                        <span>Log Out</span>
+                    </button>
+                </div>
+            </aside>
+        </div>

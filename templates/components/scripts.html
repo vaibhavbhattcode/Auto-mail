@@ -9,6 +9,7 @@ createApp({
         
         const currentTab = ref('dashboard');
         const currentTabName = ref('Overview Dashboard');
+        const showMobileSidebar = ref(false);
         
         const darkMode = ref(false);
         const toast = reactive({ show: false, message: '', type: 'success' });
@@ -983,7 +984,7 @@ createApp({
         });
 
         return {
-            authState, isRegisterMode, authForm, currentTab, currentTabName, darkMode, toast, modals,
+            authState, isRegisterMode, authForm, currentTab, currentTabName, darkMode, toast, modals, showMobileSidebar,
             globalSettings, systemFields, smtpAccounts, campaigns, suppressions,
             activeCampaign, activeCampaignLeads, activeCampaignStats, campaignFilters, leadFilters,
             activeSmtp, activeCampaignForm, bulkScheduleForm, singleScheduleForm, activePreviewLead,
