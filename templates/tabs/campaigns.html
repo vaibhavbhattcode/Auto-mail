@@ -155,7 +155,7 @@
                             </div>
 
                             <!-- Bulk interval scheduler button -->
-                            <button @click="showBulkScheduleModal = true" 
+                            <button @click="openBulkScheduleAllModal" 
                                     class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-xl shadow text-xs transition">
                                 Bulk Schedule
                             </button>
@@ -237,11 +237,33 @@
                             </div>
                         </div>
 
+                        <!-- Bulk Actions Toolbar -->
+                        <div v-if="selectedLeadIds.length > 0" class="p-4 bg-indigo-50/70 dark:bg-indigo-950/20 border-b border-indigo-100 dark:border-indigo-900/40 flex flex-col sm:flex-row gap-3 items-center justify-between animate-fadeIn">
+                            <div class="text-xs font-bold text-indigo-900 dark:text-indigo-400">
+                                Selected {{ selectedLeadIds.length }} recipients
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button @click="openBulkScheduleSelectedModal" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm transition focus:outline-none">
+                                    Schedule Selected
+                                </button>
+                                <button @click="bulkDispatchSelected" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm transition focus:outline-none">
+                                    Dispatch Selected
+                                </button>
+                                <button @click="bulkResetSelected" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shadow-sm transition focus:outline-none">
+                                    Reset Selected
+                                </button>
+                                <button @click="bulkDeleteSelected" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold shadow-sm transition focus:outline-none">
+                                    Delete Selected
+                                </button>
+                            </div>
+                        </div>
+
                         <!-- Table -->
                         <div class="overflow-x-auto">
                             <table class="w-full text-left border-collapse">
                                 <thead>
                                     <tr class="bg-slate-50/50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                        <th class="py-3 px-4 w-12"><input type="checkbox" @change="toggleSelectAllLeads" :checked="isAllLeadsSelected" class="rounded border-slate-300 dark:border-slate-800 text-indigo-600 focus:ring-indigo-500 cursor-pointer w-4 h-4 focus:outline-none"></th>
                                         <th class="py-3 px-4">Recipient</th>
                                         <th class="py-3 px-4">Subject</th>
                                         <th class="py-3 px-4">Status</th>
@@ -253,6 +275,7 @@
                                 </thead>
                                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800/80 text-xs font-medium">
                                     <tr v-for="lead in activeCampaignLeads" :key="lead.id" class="hover:bg-slate-50 dark:hover:bg-slate-850/50 transition">
+                                        <td class="py-3.5 px-4"><input type="checkbox" v-model="selectedLeadIds" :value="lead.id" class="rounded border-slate-300 dark:border-slate-850 text-indigo-600 focus:ring-indigo-500 cursor-pointer w-4 h-4 focus:outline-none"></td>
                                         <td class="py-3.5 px-4">
                                             <div class="font-bold text-slate-900 dark:text-white">{{ lead.recipient_email }}</div>
                                             <div v-if="lead.cc || lead.bcc" class="text-[10px] text-slate-400 mt-0.5 font-normal">
@@ -307,7 +330,7 @@
                                         </td>
                                     </tr>
                                     <tr v-if="activeCampaignLeads.length === 0">
-                                        <td colspan="7" class="py-12 text-center text-slate-400">
+                                        <td colspan="8" class="py-12 text-center text-slate-400">
                                             <p class="font-semibold text-sm">No recipients found in campaign.</p>
                                             <p class="text-xs text-slate-500 mt-1">Import an Excel sheet or add leads manually to start sending.</p>
                                         </td>

@@ -834,6 +834,165 @@ def manage_campaign_leads(campaign_id):
             conn.close()
             return jsonify({'success': True, 'message': 'Lead added successfully.'})
 
+# --- Bulk Lead Actions ---
+@app.route('/api/campaigns/<int:campaign_id>/leads/bulk-schedule', methods=['POST'])
+def bulk_schedule_selected_leads(campaign_id):
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
+    conn = database.get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM campaigns WHERE id = ? AND created_by = ?", (campaign_id, user_id))
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({'success': False, 'message': 'Campaign not found.'}), 404
+        
+    data = request.get_json() or {}
+    lead_ids = data.get('lead_ids', [])
+    start_time_str = data.get('start_time', '').strip()
+    interval = int(data.get('interval', 0))
+    
+    if not lead_ids:
+        conn.close()
+        return jsonify({'success': False, 'message': 'No leads selected.'}), 400
+    if not start_time_str:
+        conn.close()
+        return jsonify({'success': False, 'message': 'Start time is required.'}), 400
+        
+    try:
+        start_time = datetime.datetime.strptime(start_time_str.replace('T', ' '), "%Y-%m-%d %H:%M")
+    except ValueError:
+        try:
+            start_time = datetime.datetime.strptime(start_time_str.replace('T', ' '), "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            conn.close()
+            return jsonify({'success': False, 'message': 'Invalid date format.'}), 400
+            
+    placeholders = ','.join('?' for _ in lead_ids)
+    cursor.execute(f"SELECT id FROM leads WHERE id IN ({placeholders}) AND campaign_id = ? AND status = 'Pending' ORDER BY id ASC", (*lead_ids, campaign_id))
+    leads = cursor.fetchall()
+    
+    current_time = start_time
+    for lead in leads:
+        lead_id = lead['id']
+        sched_time_str = current_time.strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute("UPDATE leads SET scheduled_time = ? WHERE id = ?", (sched_time_str, lead_id))
+        current_time += datetime.timedelta(minutes=interval)
+        
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'message': f'Scheduled {len(leads)} selected emails with a {interval}-minute interval.'})
+
+def run_bulk_dispatch_in_background(campaign_id, lead_ids, settings):
+    import time
+    for lead_id in lead_ids:
+        try:
+            if not check_rate_limit(settings):
+                print(f"[Bulk Dispatch] Rate limit reached, stopping bulk send.")
+                break
+            conn_update = database.get_db()
+            try:
+                cursor_up = conn_update.cursor()
+                cursor_up.execute("UPDATE leads SET status = 'Processing' WHERE id = ?", (lead_id,))
+                conn_update.commit()
+            finally:
+                conn_update.close()
+                
+            success, msg = email_service.dispatch_lead_email(lead_id, settings)
+            if success:
+                update_send_tracker()
+            cooldown = calculate_dynamic_cooldown(settings)
+            time.sleep(cooldown)
+        except Exception as e:
+            print(f"[Bulk Dispatch Error] Failed for lead #{lead_id}: {str(e)}")
+    try:
+        check_and_update_campaign_completion(campaign_id)
+    except Exception as e:
+        print(f"[Bulk Dispatch Error] Failed completion check: {str(e)}")
+
+@app.route('/api/campaigns/<int:campaign_id>/leads/bulk-dispatch', methods=['POST'])
+def bulk_dispatch_selected_leads(campaign_id):
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
+    conn = database.get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM campaigns WHERE id = ? AND created_by = ?", (campaign_id, user_id))
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({'success': False, 'message': 'Campaign not found.'}), 404
+        
+    data = request.get_json() or {}
+    lead_ids = data.get('lead_ids', [])
+    if not lead_ids:
+        conn.close()
+        return jsonify({'success': False, 'message': 'No leads selected.'}), 400
+        
+    cursor.execute("SELECT key, value FROM settings")
+    settings = {row['key']: row['value'] for row in cursor.fetchall()}
+    conn.close()
+    
+    import threading
+    threading.Thread(target=run_bulk_dispatch_in_background, args=(campaign_id, lead_ids, settings), daemon=True).start()
+    return jsonify({'success': True, 'message': f'Started background dispatch for {len(lead_ids)} selected emails.'})
+
+@app.route('/api/campaigns/<int:campaign_id>/leads/bulk-reset', methods=['POST'])
+def bulk_reset_selected_leads(campaign_id):
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
+    conn = database.get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM campaigns WHERE id = ? AND created_by = ?", (campaign_id, user_id))
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({'success': False, 'message': 'Campaign not found.'}), 404
+        
+    data = request.get_json() or {}
+    lead_ids = data.get('lead_ids', [])
+    if not lead_ids:
+        conn.close()
+        return jsonify({'success': False, 'message': 'No leads selected.'}), 400
+        
+    placeholders = ','.join('?' for _ in lead_ids)
+    cursor.execute(f'''
+        UPDATE leads 
+        SET status = 'Pending', scheduled_time = NULL, sent_time = NULL, error_message = NULL, open_count = 0, click_count = 0
+        WHERE id IN ({placeholders}) AND campaign_id = ?
+    ''', (*lead_ids, campaign_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'message': f'Successfully reset {len(lead_ids)} leads back to Pending.'})
+
+@app.route('/api/campaigns/<int:campaign_id>/leads/bulk-delete', methods=['POST'])
+def bulk_delete_selected_leads(campaign_id):
+    user_id = get_logged_in_user()
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        
+    conn = database.get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM campaigns WHERE id = ? AND created_by = ?", (campaign_id, user_id))
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({'success': False, 'message': 'Campaign not found.'}), 404
+        
+    data = request.get_json() or {}
+    lead_ids = data.get('lead_ids', [])
+    if not lead_ids:
+        conn.close()
+        return jsonify({'success': False, 'message': 'No leads selected.'}), 400
+        
+    placeholders = ','.join('?' for _ in lead_ids)
+    cursor.execute(f"DELETE FROM leads WHERE id IN ({placeholders}) AND campaign_id = ?", (*lead_ids, campaign_id))
+    cursor.execute(f"DELETE FROM tracking_logs WHERE lead_id IN ({placeholders})")
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'message': f'Successfully deleted {len(lead_ids)} leads.'})
+
 @app.route('/api/campaigns/<int:campaign_id>/leads/<int:lead_id>', methods=['PUT', 'DELETE'])
 def update_delete_lead(campaign_id, lead_id):
     user_id = get_logged_in_user()

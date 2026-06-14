@@ -1,5 +1,5 @@
 <script>
-const { createApp, ref, reactive, onMounted, nextTick } = Vue;
+const { createApp, ref, reactive, onMounted, nextTick, computed } = Vue;
 
 createApp({
     setup() {
@@ -78,6 +78,8 @@ createApp({
         const activeSmtp = reactive({ id: null, sender_name: '', email_address: '', smtp_host: '', smtp_port: 587, ssl_tls: 'tls', password: '' });
         const activeCampaignForm = reactive({ id: null, name: '', description: '', smtp_account_id: null });
         const bulkScheduleForm = reactive({ start_time: '', interval: 2 });
+        const selectedLeadIds = ref([]);
+        const bulkScheduleTarget = ref('all');
         const singleScheduleForm = reactive({ lead_id: null, scheduled_time: '' });
         const activePreviewLead = ref({});
 
@@ -462,6 +464,7 @@ createApp({
         const viewCampaignDetails = async (camp) => {
             currentTab.value = 'campaign-details';
             currentTabName.value = 'Campaign Dashboard';
+            selectedLeadIds.value = []; // Reset selected leads list
             
             // Fetch campaign full details
             const res = await fetch(`/api/campaigns?search=${encodeURIComponent(camp.name)}`);
@@ -581,22 +584,131 @@ createApp({
         // Bulk Interval Scheduling
         const saveBulkSchedule = async () => {
             const formatted = bulkScheduleForm.start_time.replace('T', ' ');
+            const targetUrl = bulkScheduleTarget.value === 'selected' 
+                ? `/api/campaigns/${activeCampaign.value.id}/leads/bulk-schedule`
+                : `/api/campaigns/${activeCampaign.value.id}/bulk-schedule`;
+            
+            const payload = {
+                start_time: formatted,
+                interval: bulkScheduleForm.interval
+            };
+            if (bulkScheduleTarget.value === 'selected') {
+                payload.lead_ids = selectedLeadIds.value;
+            }
+
             showToast('Scheduling campaign queue based on interval...', 'success');
             try {
-                const res = await fetch(`/api/campaigns/${activeCampaign.value.id}/bulk-schedule`, {
+                const res = await fetch(targetUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ start_time: formatted, interval: bulkScheduleForm.interval })
+                    body: JSON.stringify(payload)
                 });
                 const data = await res.json();
                 if (data.success) {
                     showToast(data.message, 'success');
                     modals.bulkSchedule = false;
+                    selectedLeadIds.value = []; // Reset selection
                     fetchActiveCampaignLeads();
                     fetchActiveCampaignStats();
+                } else {
+                    showToast(data.message || 'Bulk scheduling failed.', 'error');
                 }
             } catch (e) {
                 showToast('Bulk scheduling request failed.', 'error');
+            }
+        };
+
+        // Selection Helpers
+        const isAllLeadsSelected = computed(() => {
+            return activeCampaignLeads.value.length > 0 && selectedLeadIds.value.length === activeCampaignLeads.value.length;
+        });
+
+        const toggleSelectAllLeads = (e) => {
+            if (e.target.checked) {
+                selectedLeadIds.value = activeCampaignLeads.value.map(lead => lead.id);
+            } else {
+                selectedLeadIds.value = [];
+            }
+        };
+
+        const openBulkScheduleAllModal = () => {
+            bulkScheduleTarget.value = 'all';
+            modals.bulkSchedule = true;
+        };
+
+        const openBulkScheduleSelectedModal = () => {
+            bulkScheduleTarget.value = 'selected';
+            modals.bulkSchedule = true;
+        };
+
+        const bulkDispatchSelected = async () => {
+            if (selectedLeadIds.value.length === 0) return;
+            showToast('Starting background dispatch for selected emails...', 'success');
+            try {
+                const res = await fetch(`/api/campaigns/${activeCampaign.value.id}/leads/bulk-dispatch`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lead_ids: selectedLeadIds.value })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    selectedLeadIds.value = [];
+                    fetchActiveCampaignLeads();
+                    fetchActiveCampaignStats();
+                } else {
+                    showToast(data.message || 'Failed to dispatch selected emails.', 'error');
+                }
+            } catch (e) {
+                showToast('Bulk dispatch request failed.', 'error');
+            }
+        };
+
+        const bulkResetSelected = async () => {
+            if (selectedLeadIds.value.length === 0) return;
+            if (!confirm(`Are you sure you want to reset status to Pending for the ${selectedLeadIds.value.length} selected recipients?`)) return;
+            showToast('Resetting selected leads...', 'success');
+            try {
+                const res = await fetch(`/api/campaigns/${activeCampaign.value.id}/leads/bulk-reset`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lead_ids: selectedLeadIds.value })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    selectedLeadIds.value = [];
+                    fetchActiveCampaignLeads();
+                    fetchActiveCampaignStats();
+                } else {
+                    showToast(data.message || 'Failed to reset selected leads.', 'error');
+                }
+            } catch (e) {
+                showToast('Bulk reset request failed.', 'error');
+            }
+        };
+
+        const bulkDeleteSelected = async () => {
+            if (selectedLeadIds.value.length === 0) return;
+            if (!confirm(`Are you sure you want to delete the ${selectedLeadIds.value.length} selected recipients?`)) return;
+            showToast('Deleting selected leads...', 'success');
+            try {
+                const res = await fetch(`/api/campaigns/${activeCampaign.value.id}/leads/bulk-delete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lead_ids: selectedLeadIds.value })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    selectedLeadIds.value = [];
+                    fetchActiveCampaignLeads();
+                    fetchActiveCampaignStats();
+                } else {
+                    showToast(data.message || 'Failed to delete selected leads.', 'error');
+                }
+            } catch (e) {
+                showToast('Bulk delete request failed.', 'error');
             }
         };
 
@@ -1027,7 +1139,9 @@ createApp({
             openSingleScheduleModal, saveSingleSchedule, saveBulkSchedule, previewRenderedEmail, getRenderedEmailHtml,
             handleExportReport, addSuppression, deleteSuppression, triggerUploadModal, handleFileChange, handleFileDrop,
             uploadAndPreview, validateMapping, getPreviewMappedValue, importLeads, handleMappingSelectorChange,
-            getCampaignStatusColorClass, getCampaignStatusBadgeClass, getCampaignProgress
+            getCampaignStatusColorClass, getCampaignStatusBadgeClass, getCampaignProgress,
+            isAllLeadsSelected, toggleSelectAllLeads, openBulkScheduleAllModal, openBulkScheduleSelectedModal,
+            bulkDispatchSelected, bulkResetSelected, bulkDeleteSelected
         };
     }
 }).mount('#app');
