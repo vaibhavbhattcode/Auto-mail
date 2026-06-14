@@ -110,23 +110,60 @@ createApp({
             setTimeout(() => { toast.show = false; }, 4000);
         };
 
-        // Tab selection
+        // Tab selection with Hash Router
         const setTab = (tab) => {
-            currentTab.value = tab;
-            if (tab === 'dashboard') {
-                currentTabName.value = 'Overview Dashboard';
-                fetchSummaryStats();
-            } else if (tab === 'campaigns') {
-                currentTabName.value = 'Email Campaigns';
-                fetchCampaigns();
-            } else if (tab === 'smtp') {
-                currentTabName.value = 'SMTP Configurations';
-                fetchSmtpAccounts();
-            } else if (tab === 'suppression') {
-                currentTabName.value = 'Suppression Block List';
-                fetchSuppressions();
-            } else if (tab === 'settings') {
-                currentTabName.value = 'Global Platform Settings';
+            window.location.hash = `#/${tab}`;
+        };
+
+        const handleHashChange = async () => {
+            const hash = window.location.hash || '#/dashboard';
+            
+            if (hash.startsWith('#/campaign-details/')) {
+                const campaignIdStr = hash.replace('#/campaign-details/', '');
+                const campaignId = parseInt(campaignIdStr);
+                if (campaignId) {
+                    currentTab.value = 'campaign-details';
+                    currentTabName.value = 'Campaign Dashboard';
+                    selectedLeadIds.value = []; // Reset selected leads list
+                    
+                    try {
+                        const res = await fetch('/api/campaigns');
+                        const list = await res.json();
+                        const found = list.find(item => item.id === campaignId);
+                        if (found) {
+                            activeCampaign.value = found;
+                            fetchActiveCampaignLeads();
+                            fetchActiveCampaignStats();
+                        } else {
+                            window.location.hash = '#/campaigns';
+                        }
+                    } catch (e) {
+                        window.location.hash = '#/campaigns';
+                    }
+                }
+            } else {
+                let tab = 'dashboard';
+                if (hash === '#/campaigns') tab = 'campaigns';
+                else if (hash === '#/smtp') tab = 'smtp';
+                else if (hash === '#/suppression') tab = 'suppression';
+                else if (hash === '#/settings') tab = 'settings';
+                
+                currentTab.value = tab;
+                if (tab === 'dashboard') {
+                    currentTabName.value = 'Overview Dashboard';
+                    fetchSummaryStats();
+                } else if (tab === 'campaigns') {
+                    currentTabName.value = 'Email Campaigns';
+                    fetchCampaigns();
+                } else if (tab === 'smtp') {
+                    currentTabName.value = 'SMTP Configurations';
+                    fetchSmtpAccounts();
+                } else if (tab === 'suppression') {
+                    currentTabName.value = 'Suppression Block List';
+                    fetchSuppressions();
+                } else if (tab === 'settings') {
+                    currentTabName.value = 'Global Platform Settings';
+                }
             }
         };
 
@@ -461,19 +498,8 @@ createApp({
         };
 
         // Campaign Details View & Leads list
-        const viewCampaignDetails = async (camp) => {
-            currentTab.value = 'campaign-details';
-            currentTabName.value = 'Campaign Dashboard';
-            selectedLeadIds.value = []; // Reset selected leads list
-            
-            // Fetch campaign full details
-            const res = await fetch(`/api/campaigns?search=${encodeURIComponent(camp.name)}`);
-            const list = await res.json();
-            const found = list.find(item => item.id === camp.id);
-            activeCampaign.value = found || camp;
-            
-            fetchActiveCampaignLeads();
-            fetchActiveCampaignStats();
+        const viewCampaignDetails = (camp) => {
+            window.location.hash = `#/campaign-details/${camp.id}`;
         };
 
         const fetchActiveCampaignLeads = async () => {
@@ -1118,6 +1144,10 @@ createApp({
 
         onMounted(() => {
             fetchAuthStatus();
+            
+            // Set up hash change router
+            window.addEventListener('hashchange', handleHashChange);
+            handleHashChange(); // Run initial routing check
             
             // Load theme choice
             const darkSaved = localStorage.getItem('oc_dark_mode') === 'true';
