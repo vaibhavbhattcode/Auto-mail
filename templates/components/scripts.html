@@ -251,6 +251,7 @@ createApp({
 
         // Settings
         const fetchGlobalSettings = async () => {
+            if (!authState.logged_in) return;
             try {
                 const res = await fetch('/api/settings');
                 if (res.ok) {
@@ -281,6 +282,7 @@ createApp({
 
         // Summary statistics
         const fetchSummaryStats = async () => {
+            if (!authState.logged_in) return;
             try {
                 const res = await fetch('/api/dashboard/summary');
                 if (res.ok) {
@@ -352,6 +354,7 @@ createApp({
 
         // SMTP calls
         const fetchSmtpAccounts = async () => {
+            if (!authState.logged_in) return;
             try {
                 const res = await fetch('/api/smtp-accounts');
                 if (res.ok) {
@@ -418,6 +421,7 @@ createApp({
 
         // Campaign calls
         const fetchCampaigns = async () => {
+            if (!authState.logged_in) return;
             try {
                 const params = new URLSearchParams({
                     search: campaignFilters.search,
@@ -844,6 +848,7 @@ createApp({
 
         // Suppression Block lists
         const fetchSuppressions = async () => {
+            if (!authState.logged_in) return;
             try {
                 const res = await fetch('/api/suppression-list');
                 if (res.ok) {
