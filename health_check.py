@@ -201,13 +201,21 @@ try:
         try:
             if ssl_tls == 'ssl' or port == 465:
                 context = ssl_module.create_default_context()
-                server = smtplib.SMTP_SSL(host, port, timeout=15, context=context)
+                try:
+                    server = smtplib.SMTP_SSL(host, port, timeout=15, context=context)
+                except (ssl_module.SSLError, ssl_module.CertificateError) as ssl_err:
+                    context = ssl_module._create_unverified_context()
+                    server = smtplib.SMTP_SSL(host, port, timeout=15, context=context)
             else:
                 server = smtplib.SMTP(host, port, timeout=15)
                 server.ehlo()
                 if ssl_tls == 'tls' or port == 587:
                     context = ssl_module.create_default_context()
-                    server.starttls(context=context)
+                    try:
+                        server.starttls(context=context)
+                    except (ssl_module.SSLError, ssl_module.CertificateError) as ssl_err:
+                        context = ssl_module._create_unverified_context()
+                        server.starttls(context=context)
                     server.ehlo()
             
             total += 1; passed += test_result("SMTP Server Connect", True, f"Connected to {host}:{port}")

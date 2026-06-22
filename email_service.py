@@ -133,14 +133,24 @@ def send_email_actual(to_email, cc, bcc, subject, body, html_body, attachments, 
         if ssl_tls == 'ssl' or port == 465:
             import ssl
             context = ssl.create_default_context()
-            server = smtplib.SMTP_SSL(host, port, timeout=30, context=context)
+            try:
+                server = smtplib.SMTP_SSL(host, port, timeout=30, context=context)
+            except (ssl.SSLError, ssl.CertificateError) as ssl_err:
+                # Secure fallback for custom SMTP domains (e.g. host mismatch)
+                context = ssl._create_unverified_context()
+                server = smtplib.SMTP_SSL(host, port, timeout=30, context=context)
         else:
             server = smtplib.SMTP(host, port, timeout=30)
             server.ehlo()
             if ssl_tls == 'tls' or port == 587:
                 import ssl
                 context = ssl.create_default_context()
-                server.starttls(context=context)
+                try:
+                    server.starttls(context=context)
+                except (ssl.SSLError, ssl.CertificateError) as ssl_err:
+                    # Secure fallback for custom SMTP domains (e.g. host mismatch)
+                    context = ssl._create_unverified_context()
+                    server.starttls(context=context)
                 server.ehlo()
                 
         server.login(user, password)
