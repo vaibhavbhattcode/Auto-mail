@@ -1,29 +1,29 @@
             <!-- Header Navbar -->
-            <header class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 py-4 flex items-center justify-between z-20">
+            <header class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-800/80 px-6 py-4 flex items-center justify-between z-20 transition-all duration-300">
                 <div class="flex items-center space-x-4">
-                    <button @click="showMobileSidebar = true" class="lg:hidden p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none">
+                    <button @click="showMobileSidebar = true" class="lg:hidden p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none transition">
                         <!-- Mobile burger menu icon -->
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
                     </button>
                     <div>
-                        <h1 class="text-xl font-bold text-slate-900 dark:text-white capitalize tracking-tight">{{ currentTabName }}</h1>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Automated Pitch Outreach Platform</p>
+                        <h1 class="text-lg font-bold text-slate-900 dark:text-white capitalize tracking-tight leading-tight">{{ currentTabName }}</h1>
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400 font-medium tracking-wide uppercase mt-0.5">Automated Pitch Outreach Platform</p>
                     </div>
                 </div>
 
                 <div class="flex items-center space-x-3">
                     <!-- Sending Mode Toggle -->
                     <button @click="toggleSendingMode" 
-                            class="inline-flex items-center px-4 py-2 rounded-xl text-xs font-extrabold border transition shadow-sm"
-                            :class="globalSettings.email_mode === 'live' ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-900' : 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-900'">
-                        <span class="w-2.5 h-2.5 rounded-full mr-2" :class="globalSettings.email_mode === 'live' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'"></span>
+                            class="inline-flex items-center px-4 py-2.5 rounded-xl text-xs font-bold border transition duration-200 hover:scale-[1.01] active:scale-[0.99] shadow-sm focus:outline-none"
+                            :class="globalSettings.email_mode === 'live' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400'">
+                        <span class="w-2 h-2 rounded-full mr-2 shadow" :class="globalSettings.email_mode === 'live' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'"></span>
                         <span>{{ globalSettings.email_mode === 'live' ? 'LIVE SMTP' : 'SIMULATION' }}</span>
                     </button>
 
                     <!-- Dark mode switch -->
-                    <button @click="toggleDarkMode" class="p-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
-                        <svg v-if="!darkMode" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
-                        <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                    <button @click="toggleDarkMode" class="p-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition duration-200 hover:scale-105 focus:outline-none">
+                        <svg v-if="!darkMode" class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                        <svg v-else class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
                     </button>
                 </div>
             </header>

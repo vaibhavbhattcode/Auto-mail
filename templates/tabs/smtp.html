@@ -2,53 +2,53 @@
                 <div v-if="currentTab === 'smtp'" class="space-y-6 animate-fadeIn">
                     <div class="flex items-center justify-between">
                         <div>
-                            <h3 class="text-lg font-bold text-slate-900 dark:text-white">SMTP Mail Configurations</h3>
+                            <h3 class="text-base font-bold text-slate-900 dark:text-white">SMTP Mail Configurations</h3>
                             <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Configure custom SMTP servers to send emails from your own accounts</p>
                         </div>
                         <button @click="openAddSmtpModal" 
-                                class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-xl shadow text-xs transition flex items-center space-x-1">
+                                class="bg-indigo-650 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white font-bold py-2.5 px-4.5 rounded-xl shadow-lg shadow-indigo-500/10 text-xs transition duration-150 flex items-center space-x-1 hover:scale-[1.01] active:scale-[0.99]">
                             <span>+ Add SMTP</span>
                         </button>
                     </div>
 
                     <div v-if="smtpAccounts.length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div v-for="acc in smtpAccounts" :key="acc.id" 
-                             class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between hover:shadow-md transition">
+                             class="bg-white/85 dark:bg-slate-900/85 backdrop-blur-xl border border-slate-200/60 dark:border-slate-800/80 rounded-3xl p-6 shadow-sm hover:shadow-md hover:border-indigo-500/20 transition duration-300 flex flex-col justify-between group">
                             <div>
                                 <div class="flex items-center justify-between mb-4">
-                                    <h4 class="font-bold text-base text-slate-900 dark:text-white truncate" :title="acc.sender_name">
+                                    <h4 class="font-extrabold text-sm text-slate-900 dark:text-white truncate max-w-[70%]" :title="acc.sender_name">
                                         {{ acc.sender_name || 'No Display Name' }}
                                     </h4>
-                                    <span class="text-xs font-mono bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-500">
+                                    <span class="text-[9px] font-bold font-mono bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-500">
                                         {{ (acc.ssl_tls || '').toUpperCase() }}
                                     </span>
                                 </div>
-                                <div class="space-y-2 text-xs">
-                                    <div class="flex justify-between"><span class="text-slate-400">Email Address:</span><span class="font-semibold text-slate-900 dark:text-white">{{ acc.email_address }}</span></div>
-                                    <div class="flex justify-between"><span class="text-slate-400">SMTP Host:</span><span class="font-semibold text-slate-700 dark:text-slate-300">{{ acc.smtp_host }}:{{ acc.smtp_port }}</span></div>
+                                <div class="space-y-2.5 text-xs">
+                                    <div class="flex justify-between border-b border-slate-100/50 dark:border-slate-850/50 pb-2"><span class="text-slate-450">Email Address:</span><span class="font-bold text-slate-900 dark:text-white">{{ acc.email_address }}</span></div>
+                                    <div class="flex justify-between border-b border-slate-100/50 dark:border-slate-850/50 pb-2"><span class="text-slate-450">SMTP Host:</span><span class="font-semibold text-slate-700 dark:text-slate-350">{{ acc.smtp_host }}:{{ acc.smtp_port }}</span></div>
                                 </div>
                             </div>
 
-                            <div class="flex items-center justify-between border-t border-slate-100 dark:border-slate-800/80 pt-4 mt-6">
+                            <div class="flex items-center justify-between border-t border-slate-100/80 dark:border-slate-850/80 pt-4 mt-6">
                                 <button @click="testSmtpConnection(acc.id)" 
-                                        class="text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 text-xs font-bold flex items-center space-x-1">
+                                        class="text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 text-xs font-bold flex items-center space-x-1 focus:outline-none transition">
                                     <span>Test SMTP Connection</span>
                                 </button>
                                 
                                 <div class="flex items-center space-x-2">
-                                    <button @click="openEditSmtpModal(acc)" class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 dark:text-slate-300 transition" title="Edit">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                    <button @click="openEditSmtpModal(acc)" class="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-855 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition duration-150" title="Edit">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                     </button>
-                                    <button @click="deleteSmtpAccount(acc.id)" class="p-2 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 transition" title="Delete">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                    <button @click="deleteSmtpAccount(acc.id)" class="p-2 rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500/25 transition duration-150" title="Delete">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                     </button>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div v-else class="text-center py-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl text-slate-400">
-                        <svg class="w-14 h-14 mx-auto mb-4 opacity-40 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                        <p class="text-base font-semibold">No SMTP accounts configured.</p>
-                        <button @click="openAddSmtpModal" class="text-indigo-500 font-bold hover:underline mt-2">Add your first SMTP account &rarr;</button>
+                    <div v-else class="text-center py-16 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-3xl text-slate-400">
+                        <svg class="w-12 h-12 mx-auto mb-4 opacity-40 text-slate-450" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                        <p class="text-sm font-semibold">No SMTP accounts configured.</p>
+                        <button @click="openAddSmtpModal" class="text-indigo-500 font-bold hover:underline mt-2 text-xs">Add your first SMTP account &rarr;</button>
                     </div>
                 </div>

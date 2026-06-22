@@ -1,15 +1,15 @@
     <!-- MODAL: EXCEL / CSV IMPORT AND COLUMN MAPPING WIZARD -->
     <div v-if="modals.upload" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-md animate-fadeIn">
-        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full p-8 shadow-2xl relative overflow-hidden animate-modalScale">
+        <div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border border-slate-200/60 dark:border-slate-800/80 rounded-3xl max-w-2xl w-full p-8 shadow-2xl shadow-slate-950/15 relative overflow-hidden animate-modalScale">
             <!-- Step Indicators -->
-            <div class="flex items-center justify-between mb-8 pb-5 border-b border-slate-100 dark:border-slate-800">
-                <span class="text-base font-bold text-slate-900 dark:text-white">Excel Import Wizard</span>
+            <div class="flex items-center justify-between mb-8 pb-5 border-b border-slate-100 dark:border-slate-805">
+                <span class="text-sm font-bold text-slate-900 dark:text-white">Excel Import Wizard</span>
                 <div class="flex items-center space-x-2">
-                    <span class="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs" :class="wizardStep >= 1 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'">1</span>
-                    <div class="w-8 h-[2px] bg-slate-100 dark:bg-slate-800"></div>
-                    <span class="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs" :class="wizardStep >= 2 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'">2</span>
-                    <div class="w-8 h-[2px] bg-slate-100 dark:bg-slate-800"></div>
-                    <span class="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs" :class="wizardStep >= 3 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'">3</span>
+                    <span class="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shadow-sm transition duration-200" :class="wizardStep >= 1 ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'">1</span>
+                    <div class="w-8 h-[2px] transition duration-200" :class="wizardStep >= 2 ? 'bg-indigo-600' : 'bg-slate-100 dark:bg-slate-800'"></div>
+                    <span class="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shadow-sm transition duration-200" :class="wizardStep >= 2 ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'">2</span>
+                    <div class="w-8 h-[2px] transition duration-200" :class="wizardStep >= 3 ? 'bg-indigo-600' : 'bg-slate-100 dark:bg-slate-800'"></div>
+                    <span class="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shadow-sm transition duration-200" :class="wizardStep >= 3 ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'">3</span>
                 </div>
             </div>
 
@@ -136,8 +136,8 @@
 
     <!-- MODAL: ADD LEADS MANUALLY -->
     <div v-if="modals.addManualLeads" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-md animate-fadeIn">
-        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-8 shadow-2xl relative overflow-hidden animate-modalScale">
-            <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-6">Add Leads Manually</h3>
+        <div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border border-slate-200/60 dark:border-slate-800/80 rounded-3xl max-w-lg w-full p-8 shadow-2xl shadow-slate-950/15 relative overflow-hidden animate-modalScale">
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white mb-6">Add Leads Manually</h3>
             
             <!-- Tab headers inside Modal -->
             <div class="flex border-b border-slate-100 dark:border-slate-800 mb-6 text-xs font-bold">
@@ -252,8 +252,8 @@
 
     <!-- MODAL: ADD / EDIT SMTP CONFIGURATION -->
     <div v-if="modals.smtp" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-md animate-fadeIn">
-        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-8 shadow-2xl animate-modalScale">
-            <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-4">
+        <div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border border-slate-200/60 dark:border-slate-800/80 rounded-3xl max-w-lg w-full p-8 shadow-2xl shadow-slate-950/15 animate-modalScale">
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white mb-4">
                 {{ activeSmtp.id ? 'Edit SMTP Configuration' : 'Add SMTP Account' }}
             </h3>
 
@@ -353,8 +353,8 @@
 
     <!-- MODAL: CREATE / EDIT CAMPAIGN -->
     <div v-if="modals.campaign" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-md animate-fadeIn">
-        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-8 shadow-2xl animate-modalScale">
-            <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-6">
+        <div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border border-slate-200/60 dark:border-slate-800/80 rounded-3xl max-w-lg w-full p-8 shadow-2xl shadow-slate-950/15 animate-modalScale">
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white mb-6">
                 {{ activeCampaignForm.id ? 'Edit Campaign Details' : 'Create Outreach Campaign' }}
             </h3>
 
@@ -392,8 +392,8 @@
 
     <!-- MODAL: BULK INTERVAL SCHEDULER -->
     <div v-if="modals.bulkSchedule" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-md animate-fadeIn">
-        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-8 shadow-2xl animate-modalScale">
-            <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-6">Bulk Schedule Queue</h3>
+        <div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border border-slate-200/60 dark:border-slate-800/80 rounded-3xl max-w-md w-full p-8 shadow-2xl shadow-slate-950/15 animate-modalScale">
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white mb-6">Bulk Schedule Queue</h3>
             
             <form @submit.prevent="saveBulkSchedule" class="space-y-4">
                 <div>
@@ -425,8 +425,8 @@
 
     <!-- MODAL: INDIVIDUAL LEAD SCHEDULER -->
     <div v-if="modals.singleSchedule" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-md animate-fadeIn">
-        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-8 shadow-2xl animate-modalScale">
-            <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-6">Schedule Individual Email</h3>
+        <div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border border-slate-200/60 dark:border-slate-800/80 rounded-3xl max-w-md w-full p-8 shadow-2xl shadow-slate-950/15 animate-modalScale">
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white mb-6">Schedule Individual Email</h3>
             
             <form @submit.prevent="saveSingleSchedule" class="space-y-4">
                 <div>
@@ -445,9 +445,9 @@
 
     <!-- MODAL: EMAIL TEMPLATE & RENDERING PREVIEW -->
     <div v-if="modals.previewEmail" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-md animate-fadeIn">
-        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full p-8 shadow-2xl flex flex-col max-h-[90vh] animate-modalScale">
-            <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 mb-4 flex-shrink-0">
-                <h3 class="text-base font-bold text-slate-900 dark:text-white">Generated Email Live Preview</h3>
+        <div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border border-slate-200/60 dark:border-slate-800/80 rounded-3xl max-w-2xl w-full p-8 shadow-2xl shadow-slate-950/15 flex flex-col max-h-[90vh] animate-modalScale">
+            <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-805 mb-4 flex-shrink-0">
+                <h3 class="text-sm font-bold text-slate-900 dark:text-white">Generated Email Live Preview</h3>
                 <button @click="modals.previewEmail = false" class="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
@@ -475,9 +475,9 @@
 
     <!-- MODAL: EDIT LEAD DETAILS & EMAIL MESSAGE -->
     <div v-if="modals.editLead" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-md animate-fadeIn">
-        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-xl w-full p-8 shadow-2xl flex flex-col max-h-[90vh] animate-modalScale">
-            <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 mb-4 flex-shrink-0">
-                <h3 class="text-base font-bold text-slate-900 dark:text-white">Edit Recipient & Message Content</h3>
+        <div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border border-slate-200/60 dark:border-slate-800/80 rounded-3xl max-w-xl w-full p-8 shadow-2xl shadow-slate-950/15 flex flex-col max-h-[90vh] animate-modalScale">
+            <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-805 mb-4 flex-shrink-0">
+                <h3 class="text-sm font-bold text-slate-900 dark:text-white">Edit Recipient & Message Content</h3>
                 <button @click="modals.editLead = false" class="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>

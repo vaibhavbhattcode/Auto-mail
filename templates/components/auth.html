@@ -1,16 +1,16 @@
     <!-- AUTHENTICATION SCREEN -->
-    <div v-if="!authState.logged_in" class="min-h-screen flex items-center justify-center bg-gradient-to-tr from-slate-900 via-indigo-950 to-slate-950 p-6 relative overflow-hidden">
+    <div v-if="!authState.logged_in" class="min-h-screen flex items-center justify-center bg-gradient-to-tr from-slate-950 via-slate-900 to-indigo-955 p-6 relative overflow-hidden">
         <!-- Abstract gradient shapes -->
         <div class="absolute w-[500px] h-[500px] rounded-full bg-indigo-500/10 -top-40 -left-40 blur-3xl"></div>
         <div class="absolute w-[500px] h-[500px] rounded-full bg-blue-500/10 -bottom-40 -right-40 blur-3xl"></div>
         
-        <div class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/50 rounded-3xl shadow-2xl max-w-md w-full p-8 relative z-10 transition-all duration-300">
+        <div class="bg-white/80 dark:bg-slate-900/85 backdrop-blur-2xl border border-slate-200/60 dark:border-slate-800/80 rounded-3xl shadow-2xl shadow-indigo-500/5 max-w-md w-full p-8 relative z-10 transition-all duration-300">
             <div class="text-center mb-8">
-                <div class="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-tr from-indigo-500 to-blue-600 text-white rounded-2xl shadow-lg shadow-indigo-500/30 mb-4 font-black text-xl tracking-wider">
+                <div class="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-tr from-indigo-500 to-blue-600 text-white rounded-2xl shadow-lg shadow-indigo-500/30 mb-4 font-black text-xl tracking-wider select-none">
                     OC
                 </div>
-                <h2 class="text-2xl font-bold text-slate-950 dark:text-white tracking-tight">Outreach Campaign Hub</h2>
-                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1.5">
+                <h2 class="text-xl font-black text-slate-950 dark:text-white tracking-tight">Outreach Campaign Hub</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-2 font-medium leading-relaxed">
                     {{ isRegisterMode ? 'Create your sender account' : 'Sign in to access your outreach panel' }}
                 </p>
             </div>
@@ -18,32 +18,32 @@
             <!-- Login / Signup Form -->
             <form @submit.prevent="handleAuth" class="space-y-5">
                 <div v-if="isRegisterMode">
-                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Display Name</label>
+                    <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Display Name</label>
                     <input type="text" v-model="authForm.full_name" placeholder="John Doe"
-                           class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition duration-200">
+                           class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition duration-205 text-xs font-semibold">
                 </div>
 
                 <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Email Address</label>
+                    <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Email Address</label>
                     <input type="email" v-model="authForm.email" placeholder="email@example.com" required
-                           class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition duration-200">
+                           class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition duration-205 text-xs font-semibold">
                 </div>
 
                 <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Password</label>
+                    <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Password</label>
                     <input type="password" v-model="authForm.password" placeholder="••••••••" required
-                           class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition duration-200">
+                           class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition duration-205 text-xs font-semibold">
                 </div>
 
                 <button type="submit" 
-                        class="w-full bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg shadow-indigo-500/20 transition duration-200 hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center space-x-2">
+                        class="w-full bg-gradient-to-r from-indigo-650 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg shadow-indigo-500/15 transition duration-200 hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center space-x-2 text-xs">
                     <span>{{ isRegisterMode ? 'Create Account' : 'Access Dashboard' }}</span>
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                 </button>
             </form>
 
-            <div class="mt-6 text-center text-sm">
-                <span class="text-slate-500 dark:text-slate-400">
+            <div class="mt-6 text-center text-xs">
+                <span class="text-slate-500 dark:text-slate-400 font-medium">
                     {{ isRegisterMode ? 'Already have an account?' : "Don't have an account?" }}
                 </span>
                 <button @click="isRegisterMode = !isRegisterMode" class="text-indigo-500 hover:underline font-bold ml-1.5 focus:outline-none">

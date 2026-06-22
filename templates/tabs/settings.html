@@ -1,33 +1,33 @@
-                <!-- TAB: GLOBAL CONTROLS & SETTINGS -->
+<!-- TAB: GLOBAL CONTROLS & SETTINGS -->
                 <div v-if="currentTab === 'settings'" class="space-y-6 animate-fadeIn">
                     <div>
-                        <h3 class="text-lg font-bold text-slate-900 dark:text-white">Global Platform Settings</h3>
+                        <h3 class="text-base font-bold text-slate-900 dark:text-white">Global Platform Settings</h3>
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Manage sending rates, anti-spam intervals, and tracking domains</p>
                     </div>
 
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <!-- Left Panel: Settings Form -->
-                        <div class="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between space-y-6">
+                        <div class="lg:col-span-2 bg-white/85 dark:bg-slate-900/85 backdrop-blur-xl border border-slate-200/60 dark:border-slate-800/80 rounded-3xl p-6 shadow-sm flex flex-col justify-between space-y-6">
                             <!-- Sending Mode Banner -->
-                            <div class="flex items-center justify-between p-4 rounded-2xl border-2 transition-colors"
-                                 :class="globalSettings.email_mode === 'live' ? 'border-emerald-300 bg-emerald-50/60 dark:border-emerald-700 dark:bg-emerald-950/20' : 'border-amber-300 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-950/20'">
-                                <div class="flex items-center space-x-3">
-                                    <div class="w-10 h-10 rounded-xl flex items-center justify-center"
-                                         :class="globalSettings.email_mode === 'live' ? 'bg-emerald-100 dark:bg-emerald-900' : 'bg-amber-100 dark:bg-amber-900'">
-                                        <span class="text-lg">{{ globalSettings.email_mode === 'live' ? '📧' : '🔒' }}</span>
+                            <div class="flex items-center justify-between p-4.5 rounded-2xl border transition-all duration-300"
+                                 :class="globalSettings.email_mode === 'live' ? 'border-emerald-500/25 bg-emerald-500/5 dark:bg-emerald-950/20' : 'border-amber-500/25 bg-amber-500/5 dark:bg-amber-950/20'">
+                                <div class="flex items-center space-x-3.5">
+                                    <div class="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm"
+                                         :class="globalSettings.email_mode === 'live' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'">
+                                        <span class="text-lg leading-none">{{ globalSettings.email_mode === 'live' ? '📧' : '🔒' }}</span>
                                     </div>
                                     <div>
-                                        <p class="text-sm font-bold" :class="globalSettings.email_mode === 'live' ? 'text-emerald-800 dark:text-emerald-300' : 'text-amber-800 dark:text-amber-300'">
-                                            {{ globalSettings.email_mode === 'live' ? 'LIVE Mode — Emails Are Being Sent' : 'SIMULATED Mode — No Emails Are Sent' }}
+                                        <p class="text-xs font-extrabold" :class="globalSettings.email_mode === 'live' ? 'text-emerald-800 dark:text-emerald-350' : 'text-amber-800 dark:text-amber-350'">
+                                            {{ globalSettings.email_mode === 'live' ? 'LIVE MODE — EMAILS ARE DELIVERING' : 'SIMULATED MODE — NO MAILS SENT' }}
                                         </p>
-                                        <p class="text-[10px] mt-0.5" :class="globalSettings.email_mode === 'live' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'">
+                                        <p class="text-[10px] font-medium mt-1" :class="globalSettings.email_mode === 'live' ? 'text-emerald-600 dark:text-emerald-400/80' : 'text-amber-600 dark:text-amber-400/80'">
                                             {{ globalSettings.email_mode === 'live' ? 'All campaigns will deliver actual emails via SMTP' : 'Campaigns run in test mode, no real emails dispatched' }}
                                         </p>
                                     </div>
                                 </div>
                                 <button type="button" @click="toggleSendingMode"
-                                        class="px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition"
-                                        :class="globalSettings.email_mode === 'live' ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'">
+                                        class="px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition duration-150 hover:scale-[1.01] active:scale-[0.99]"
+                                        :class="globalSettings.email_mode === 'live' ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-500/10' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/10'">
                                     {{ globalSettings.email_mode === 'live' ? 'Switch to Test Mode' : 'Activate Live Sending' }}
                                 </button>
                             </div>
@@ -35,52 +35,52 @@
                             <form @submit.prevent="saveGlobalSettings" class="space-y-6">
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
-                                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Daily Dispatch Limit</label>
+                                        <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Daily Dispatch Limit</label>
                                         <input type="number" v-model="globalSettings.daily_email_limit"
-                                               class="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                               class="w-full px-3.5 py-2.5 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition duration-150">
                                     </div>
                                     <div>
-                                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Hourly Rate Limit</label>
+                                        <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Hourly Rate Limit</label>
                                         <input type="number" v-model="globalSettings.max_emails_per_hour"
-                                               class="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                               class="w-full px-3.5 py-2.5 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition duration-150">
                                     </div>
                                     <div>
-                                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Min Cooldown (seconds)</label>
+                                        <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Min Cooldown (seconds)</label>
                                         <input type="number" v-model="globalSettings.min_cooldown_seconds"
-                                               class="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                               class="w-full px-3.5 py-2.5 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition duration-150">
                                     </div>
                                     <div>
-                                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Max Cooldown (seconds)</label>
+                                        <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Max Cooldown (seconds)</label>
                                         <input type="number" v-model="globalSettings.max_cooldown_seconds"
-                                               class="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                               class="w-full px-3.5 py-2.5 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition duration-150">
                                     </div>
                                     <div>
-                                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Emails Per Batch</label>
+                                        <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Emails Per Batch</label>
                                         <input type="number" v-model="globalSettings.emails_per_batch"
-                                               class="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                               class="w-full px-3.5 py-2.5 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition duration-150">
                                     </div>
                                     <div>
-                                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Batch Cooldown (minutes)</label>
+                                        <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Batch Cooldown (minutes)</label>
                                         <input type="number" v-model="globalSettings.batch_cooldown_minutes"
-                                               class="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                               class="w-full px-3.5 py-2.5 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition duration-150">
                                     </div>
                                     <div>
-                                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Randomize Cooldown</label>
+                                        <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Randomize Cooldown</label>
                                         <select v-model="globalSettings.randomize_cooldown"
-                                                class="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer">
+                                                class="w-full px-3.5 py-2.5 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition duration-150 cursor-pointer">
                                             <option value="true">Yes, Randomize</option>
                                             <option value="false">No, Keep Constant</option>
                                         </select>
                                     </div>
                                     <div class="md:col-span-2">
-                                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Domain tracking URL (For Pixel and redirects)</label>
+                                        <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Domain tracking URL (For Pixel and redirects)</label>
                                         <input type="url" v-model="globalSettings.tracking_domain" placeholder="https://xyz.trycloudflare.com"
-                                               class="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                               class="w-full px-3.5 py-2.5 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition duration-150">
                                     </div>
                                 </div>
 
-                                <div class="border-t border-slate-100 dark:border-slate-800/80 pt-5 flex justify-end">
-                                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-6 rounded-xl text-xs shadow transition">
+                                <div class="border-t border-slate-100 dark:border-slate-850 pt-5 flex justify-end">
+                                    <button type="submit" class="bg-indigo-650 hover:bg-indigo-750 dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white font-bold py-2.5 px-6 rounded-xl text-xs shadow transition duration-150 hover:scale-[1.01] active:scale-[0.99]">
                                         Save Settings
                                     </button>
                                 </div>
@@ -88,21 +88,21 @@
                         </div>
 
                         <!-- Right Panel: Anti-Spam Deliverability Guide -->
-                        <div class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-5">
+                        <div class="bg-slate-50/50 dark:bg-slate-950/20 border border-slate-200/60 dark:border-slate-800/80 rounded-3xl p-6 shadow-sm space-y-5">
                             <div>
-                                <h4 class="font-bold text-sm text-slate-900 dark:text-white flex items-center space-x-2">
-                                    <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-                                    <span>Anti-Spam & Deliverability Guide</span>
+                                <h4 class="font-extrabold text-sm text-slate-900 dark:text-white flex items-center space-x-2">
+                                    <svg class="w-4 h-4 text-indigo-550" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                                    <span>Anti-Spam Guide</span>
                                 </h4>
-                                <p class="text-[10px] text-slate-500 mt-1">Best practices for sending cold outreach campaigns successfully.</p>
+                                <p class="text-[10px] text-slate-500 mt-1.5 font-medium leading-relaxed">Best practices for sending cold outreach campaigns successfully.</p>
                             </div>
 
                             <!-- Guide Sections -->
                             <div class="space-y-4 text-xs">
                                 <!-- Setup Advice -->
                                 <div class="space-y-1.5">
-                                    <span class="font-bold text-indigo-500 text-[10px] uppercase tracking-wider block">Recommended Settings (for 100+ leads)</span>
-                                    <ul class="list-disc list-inside text-slate-600 dark:text-slate-400 space-y-1 text-[11px] leading-relaxed">
+                                    <span class="font-extrabold text-indigo-550 text-[9px] uppercase tracking-wider block">Recommended Settings (for 100+ leads)</span>
+                                    <ul class="list-disc list-inside text-slate-600 dark:text-slate-400 space-y-1.5 text-[11px] leading-relaxed">
                                         <li><strong>Daily Limit:</strong> Keep it between 100 - 150.</li>
                                         <li><strong>Cooldown gap:</strong> Min 30s / Max 90s.</li>
                                         <li><strong>Batching:</strong> 5 mails/batch with 10 min break.</li>
@@ -111,9 +111,9 @@
                                 </div>
 
                                 <!-- Domain Setup Advice -->
-                                <div class="space-y-1.5 pt-3 border-t border-slate-200 dark:border-slate-800/80">
-                                    <span class="font-bold text-indigo-500 text-[10px] uppercase tracking-wider block">Domain DNS Keys Setup</span>
-                                    <div class="space-y-2 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
+                                <div class="space-y-1.5 pt-3 border-t border-slate-200/60 dark:border-slate-800/80">
+                                    <span class="font-extrabold text-indigo-550 text-[9px] uppercase tracking-wider block">Domain DNS Keys Setup</span>
+                                    <div class="space-y-2.5 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
                                         <div>
                                             <span class="font-bold text-slate-900 dark:text-white block">1. SPF Record</span>
                                             Authorizes our SMTP server to send mail from your domain.
@@ -130,9 +130,9 @@
                                 </div>
 
                                 <!-- Content Guidelines -->
-                                <div class="space-y-1.5 pt-3 border-t border-slate-200 dark:border-slate-800/80">
-                                    <span class="font-bold text-indigo-500 text-[10px] uppercase tracking-wider block">Content Optimization</span>
-                                    <ul class="list-disc list-inside text-slate-600 dark:text-slate-400 space-y-1 text-[11px] leading-relaxed">
+                                <div class="space-y-1.5 pt-3 border-t border-slate-200/60 dark:border-slate-800/80">
+                                    <span class="font-extrabold text-indigo-550 text-[9px] uppercase tracking-wider block">Content Optimization</span>
+                                    <ul class="list-disc list-inside text-slate-600 dark:text-slate-400 space-y-1.5 text-[11px] leading-relaxed">
                                         <li>Always use personalized variables (e.g. <code>[[company_name]]</code>) to make each email body unique.</li>
                                         <li>Avoid words like "100% Free", "Guarantee", "Buy Now", "Earn Cash".</li>
                                         <li>Verify email lists to avoid bounces (dead emails ruin sending reputation).</li>
