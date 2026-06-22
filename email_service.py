@@ -7,6 +7,7 @@ import urllib.parse
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
+from email.utils import formatdate
 import database
 
 def render_template(text, variables):
@@ -80,7 +81,7 @@ def send_email_actual(to_email, cc, bcc, subject, body, html_body, attachments, 
     msg['To'] = to_email
     msg['Subject'] = subject
     msg['Reply-To'] = user
-    msg['Date'] = datetime.datetime.now().strftime('%a, %d %b %Y %H:%M:%S %z')
+    msg['Date'] = formatdate(localtime=True)
     
     # Process CC / BCC recipients
     all_recipients = [to_email]
@@ -144,22 +145,32 @@ def send_email_actual(to_email, cc, bcc, subject, body, html_body, attachments, 
                 
         server.login(user, password)
         server.sendmail(user, all_recipients, msg.as_string())
-        server.quit()
         return True, "Email sent successfully."
         
     except smtplib.SMTPRecipientsRefused as e:
         # Hard bounce - address rejected by server
         raise ValueError(f"Recipient Refused (Bounce): {str(e)}")
     except smtplib.SMTPAuthenticationError as e:
-        raise ValueError(f"SMTP authentication failed: {str(e)}")
+        raise ValueError(f"SMTP authentication failed. Check your email/password. Error: {str(e)}")
+    except smtplib.SMTPConnectError as e:
+        raise RuntimeError(f"Could not connect to SMTP server {host}:{port}. Error: {str(e)}")
+    except smtplib.SMTPServerDisconnected as e:
+        raise RuntimeError(f"Server disconnected unexpectedly. Check host/port/SSL settings. Error: {str(e)}")
+    except ConnectionRefusedError:
+        raise RuntimeError(f"Connection refused by {host}:{port}. Verify SMTP host and port are correct.")
+    except TimeoutError:
+        raise RuntimeError(f"Connection to {host}:{port} timed out. Check your network and SMTP host.")
     except Exception as e:
         raise RuntimeError(f"SMTP Error: {str(e)}")
     finally:
         if server:
             try:
                 server.quit()
-            except:
-                pass
+            except Exception:
+                try:
+                    server.close()
+                except Exception:
+                    pass
 
 def send_test_email(smtp_settings):
     """Send a basic SMTP test email"""

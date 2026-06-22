@@ -253,32 +253,64 @@
     <!-- MODAL: ADD / EDIT SMTP CONFIGURATION -->
     <div v-if="modals.smtp" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-md animate-fadeIn">
         <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-8 shadow-2xl animate-modalScale">
-            <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-6">
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-4">
                 {{ activeSmtp.id ? 'Edit SMTP Configuration' : 'Add SMTP Account' }}
             </h3>
+
+            <!-- Quick-Fill Provider Presets -->
+            <div v-if="!activeSmtp.id" class="mb-6">
+                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Quick Setup — Select Your Email Provider</label>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" @click="activeSmtp.smtp_host = 'smtpout.secureserver.net'; activeSmtp.smtp_port = 465; activeSmtp.ssl_tls = 'ssl'"
+                            class="px-3 py-1.5 rounded-xl text-[11px] font-bold border-2 transition"
+                            :class="activeSmtp.smtp_host === 'smtpout.secureserver.net' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-500' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'">
+                        ⚡ Titan Mail (GoDaddy)
+                    </button>
+                    <button type="button" @click="activeSmtp.smtp_host = 'smtp.titan.email'; activeSmtp.smtp_port = 465; activeSmtp.ssl_tls = 'ssl'"
+                            class="px-3 py-1.5 rounded-xl text-[11px] font-bold border-2 transition"
+                            :class="activeSmtp.smtp_host === 'smtp.titan.email' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-500' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'">
+                        Titan Mail (Direct)
+                    </button>
+                    <button type="button" @click="activeSmtp.smtp_host = 'smtp.gmail.com'; activeSmtp.smtp_port = 587; activeSmtp.ssl_tls = 'tls'"
+                            class="px-3 py-1.5 rounded-xl text-[11px] font-bold border-2 transition"
+                            :class="activeSmtp.smtp_host === 'smtp.gmail.com' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-500' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'">
+                        Gmail
+                    </button>
+                    <button type="button" @click="activeSmtp.smtp_host = 'smtp.office365.com'; activeSmtp.smtp_port = 587; activeSmtp.ssl_tls = 'tls'"
+                            class="px-3 py-1.5 rounded-xl text-[11px] font-bold border-2 transition"
+                            :class="activeSmtp.smtp_host === 'smtp.office365.com' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-500' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'">
+                        Outlook 365
+                    </button>
+                    <button type="button" @click="activeSmtp.smtp_host = 'smtp.zoho.com'; activeSmtp.smtp_port = 465; activeSmtp.ssl_tls = 'ssl'"
+                            class="px-3 py-1.5 rounded-xl text-[11px] font-bold border-2 transition"
+                            :class="activeSmtp.smtp_host === 'smtp.zoho.com' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-500' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'">
+                        Zoho Mail
+                    </button>
+                </div>
+            </div>
 
             <form @submit.prevent="saveSmtpAccount" class="space-y-4">
                 <div>
                     <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Display Name</label>
-                    <input type="text" v-model="activeSmtp.sender_name" placeholder="John Outreach" required
+                    <input type="text" v-model="activeSmtp.sender_name" placeholder="Your Name / Brand" required
                            class="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
 
                 <div>
                     <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Sender Email Address</label>
-                    <input type="email" v-model="activeSmtp.email_address" placeholder="sender@domain.com" required
+                    <input type="email" v-model="activeSmtp.email_address" placeholder="you@yourdomain.com" required
                            class="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">SMTP Host</label>
-                        <input type="text" v-model="activeSmtp.smtp_host" placeholder="smtp.gmail.com" required
+                        <input type="text" v-model="activeSmtp.smtp_host" placeholder="smtp.titan.email" required
                                class="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">SMTP Port</label>
-                        <input type="number" v-model="activeSmtp.smtp_port" placeholder="587" required
+                        <input type="number" v-model="activeSmtp.smtp_port" placeholder="465" required
                                class="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     </div>
                 </div>
@@ -288,16 +320,27 @@
                         <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">SSL / TLS Mode</label>
                         <select v-model="activeSmtp.ssl_tls" 
                                 class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-semibold outline-none cursor-pointer">
-                            <option value="tls">TLS (Port 587)</option>
                             <option value="ssl">SSL (Port 465)</option>
+                            <option value="tls">TLS / STARTTLS (Port 587)</option>
                             <option value="none">None</option>
                         </select>
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Password / App Key</label>
-                        <input type="password" v-model="activeSmtp.password" :placeholder="activeSmtp.id ? 'Leave blank to keep current' : '••••••••'" :required="!activeSmtp.id"
+                        <input type="password" v-model="activeSmtp.password" :placeholder="activeSmtp.id ? 'Leave blank to keep current' : 'Your email password'" :required="!activeSmtp.id"
                                class="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     </div>
+                </div>
+
+                <!-- Titan Mail specific note -->
+                <div v-if="activeSmtp.smtp_host === 'smtp.titan.email' || activeSmtp.smtp_host === 'smtpout.secureserver.net'" class="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 text-[11px] text-amber-800 dark:text-amber-300 space-y-1">
+                    <p><strong>📌 Titan Mail Note:</strong> Make sure "Third-party email access" is <strong>enabled</strong> and 2FA is <strong>disabled</strong> in your Titan Mail settings.</p>
+                    <p v-if="activeSmtp.smtp_host === 'smtpout.secureserver.net'">
+                        <strong>GoDaddy Titan:</strong> Use <strong>Port 465</strong> with <strong>SSL</strong>. Use your full email address (e.g. hello@yourdomain.in) as the username.
+                    </p>
+                    <p v-if="!((activeSmtp.smtp_port === 465 && activeSmtp.ssl_tls === 'ssl') || (activeSmtp.smtp_port === 587 && activeSmtp.ssl_tls === 'tls')) && (activeSmtp.smtp_host === 'smtpout.secureserver.net' || activeSmtp.smtp_host === 'smtp.titan.email')" class="text-rose-600 dark:text-rose-400 font-bold">
+                        ⚠️ Warning: Titan Mail requires <strong>SSL (Port 465)</strong> or <strong>TLS/STARTTLS (Port 587)</strong>. Your current settings may not work!
+                    </p>
                 </div>
 
                 <div class="flex justify-end space-x-3 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">

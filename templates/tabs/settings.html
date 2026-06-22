@@ -8,6 +8,30 @@
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <!-- Left Panel: Settings Form -->
                         <div class="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between space-y-6">
+                            <!-- Sending Mode Banner -->
+                            <div class="flex items-center justify-between p-4 rounded-2xl border-2 transition-colors"
+                                 :class="globalSettings.email_mode === 'live' ? 'border-emerald-300 bg-emerald-50/60 dark:border-emerald-700 dark:bg-emerald-950/20' : 'border-amber-300 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-950/20'">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-10 h-10 rounded-xl flex items-center justify-center"
+                                         :class="globalSettings.email_mode === 'live' ? 'bg-emerald-100 dark:bg-emerald-900' : 'bg-amber-100 dark:bg-amber-900'">
+                                        <span class="text-lg">{{ globalSettings.email_mode === 'live' ? '📧' : '🔒' }}</span>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-bold" :class="globalSettings.email_mode === 'live' ? 'text-emerald-800 dark:text-emerald-300' : 'text-amber-800 dark:text-amber-300'">
+                                            {{ globalSettings.email_mode === 'live' ? 'LIVE Mode — Emails Are Being Sent' : 'SIMULATED Mode — No Emails Are Sent' }}
+                                        </p>
+                                        <p class="text-[10px] mt-0.5" :class="globalSettings.email_mode === 'live' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'">
+                                            {{ globalSettings.email_mode === 'live' ? 'All campaigns will deliver actual emails via SMTP' : 'Campaigns run in test mode, no real emails dispatched' }}
+                                        </p>
+                                    </div>
+                                </div>
+                                <button type="button" @click="toggleSendingMode"
+                                        class="px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition"
+                                        :class="globalSettings.email_mode === 'live' ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'">
+                                    {{ globalSettings.email_mode === 'live' ? 'Switch to Test Mode' : 'Activate Live Sending' }}
+                                </button>
+                            </div>
+
                             <form @submit.prevent="saveGlobalSettings" class="space-y-6">
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>

@@ -227,6 +227,7 @@ def init_db():
         'batch_cooldown_minutes': '5',
         'randomize_cooldown': 'true',
         'tracking_domain': 'http://localhost:5000',
+        'email_mode': 'live',
         'company_name': 'Bhatt Technologies',
         'support_email': 'support@bhatttechnologies.com',
         'timezone': 'Asia/Kolkata'

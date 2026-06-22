@@ -76,7 +76,7 @@ createApp({
         const leadFilters = reactive({ search: '', status: 'All' });
         
         // Active Form models
-        const activeSmtp = reactive({ id: null, sender_name: '', email_address: '', smtp_host: '', smtp_port: 587, ssl_tls: 'tls', password: '' });
+        const activeSmtp = reactive({ id: null, sender_name: '', email_address: '', smtp_host: 'smtp.titan.email', smtp_port: 465, ssl_tls: 'ssl', password: '' });
         const activeCampaignForm = reactive({ id: null, name: '', description: '', smtp_account_id: null });
         const bulkScheduleForm = reactive({ start_time: '', interval: 2 });
         const selectedLeadIds = ref([]);
@@ -363,7 +363,7 @@ createApp({
         };
 
         const openAddSmtpModal = () => {
-            Object.assign(activeSmtp, { id: null, sender_name: '', email_address: '', smtp_host: '', smtp_port: 587, ssl_tls: 'tls', password: '' });
+            Object.assign(activeSmtp, { id: null, sender_name: '', email_address: '', smtp_host: 'smtp.titan.email', smtp_port: 465, ssl_tls: 'ssl', password: '' });
             modals.smtp = true;
         };
 
